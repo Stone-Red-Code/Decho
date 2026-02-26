@@ -1,0 +1,16 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Decho.ViewModels"
+             xmlns:views="using:Decho.Views"
+             x:Class="Decho.Views.MessageListView"
+             x:DataType="vm:ChatViewModel">
+    <ScrollViewer>
+        <ItemsControl ItemsSource="{Binding Messages}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:MessageViewModel">
+                    <views:MessageItemView />
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </ScrollViewer>
+</UserControl>

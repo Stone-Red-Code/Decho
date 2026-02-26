@@ -1,0 +1,29 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Decho.ViewModels"
+             xmlns:views="using:Decho.Views"
+             x:Class="Decho.Views.SidebarView"
+             x:DataType="vm:SidebarViewModel">
+    <Panel Background="{DynamicResource UiTheme00}" Width="250">
+        <ScrollViewer Padding="5">
+            <ItemsControl ItemsSource="{Binding Servers}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ServerViewModel">
+                        <Expander Padding="0"
+                                  HorizontalAlignment="Stretch"
+                                  IsExpanded="{Binding IsExpanded}">
+                            <Expander.Header>
+                                <TextBlock FontWeight="Bold"
+                                           TextTrimming="CharacterEllipsis"
+                                           MaxWidth="190"
+                                           Padding="0"
+                                           Text="{Binding Name}" />
+                            </Expander.Header>
+                            <views:ChannelListView />
+                        </Expander>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Panel>
+</UserControl>

@@ -1,0 +1,24 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Decho.ViewModels"
+             xmlns:views="using:Decho.Views"
+             xmlns:i="https://github.com/projektanker/icons.avalonia"
+             x:Class="Decho.Views.ChannelListView"
+             x:DataType="vm:ServerViewModel">
+    <ListBox Background="Transparent"
+             BorderThickness="0"
+             Margin="0"
+             ItemsSource="{Binding Channels}"
+             SelectedItem="{Binding SelectedChannel, Mode=TwoWay}">
+        <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:ChannelViewModel">
+                <TextBlock>
+                    <InlineUIContainer BaselineAlignment="Bottom">
+                        <i:Icon Value="fa-hashtag" FontWeight="Bold" Margin="0 0 0 1" />
+                    </InlineUIContainer>
+                    <Run Text="{Binding Name}" />
+                </TextBlock>
+            </DataTemplate>
+        </ListBox.ItemTemplate>
+    </ListBox>
+</UserControl>
