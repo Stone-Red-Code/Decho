@@ -1,27 +1,29 @@
 <UserControl xmlns="https://github.com/avaloniaui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:Decho.ViewModels"
-             x:Class="Decho.Views.MessageItemView"
-             x:DataType="vm:MessageViewModel">
-    <Grid Margin="5" ColumnDefinitions="Auto, Auto, *" RowDefinitions="Auto, Auto">
-        <Ellipse Grid.RowSpan="2"
-                 Width="40"
-                 Height="40"
-                 Fill="{DynamicResource UiTheme00}"
-                 Margin="0 0 5 0" />
-        <TextBlock Grid.Column="1"
-                   VerticalAlignment="Bottom"
-                   Text="{Binding AuthorName}"
-                   FontWeight="Bold" />
-        <TextBlock Grid.Column="1"
-                   Grid.Row="1"
-                   Text="{Binding TimeText}"
-                   FontSize="10" />
-        <TextBlock Grid.Column="2"
-                   Grid.RowSpan="1"
-                   VerticalAlignment="Center"
-                   Text="{Binding Content}"
-                   TextWrapping="Wrap"
-                   Margin="10 5 0 0" />
-    </Grid>
+			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+			 xmlns:vm="using:Decho.ViewModels"
+			 x:Class="Decho.Views.MessageItemView"
+			 x:DataType="vm:MessageViewModel">
+	<Grid Margin="5" ColumnDefinitions="Auto, Auto, *">
+		<Ellipse Grid.RowSpan="2" 
+				 VerticalAlignment="Top"
+				 Width="40"
+				 Height="40"
+				 Fill="{DynamicResource UiTheme00}"
+				 Margin="0 0 8 0" />
+
+		<StackPanel Grid.Column="1" VerticalAlignment="Top">
+			<StackPanel Orientation="Horizontal" Margin="0 5 0 0">
+				<TextBlock VerticalAlignment="Top"
+						   Text="{Binding AuthorName}"
+						   FontWeight="Bold" />
+				<TextBlock VerticalAlignment="Top"
+						   Text="{Binding TimeText}"
+						   FontSize="10"
+						   Margin="5 0 0 0" />
+			</StackPanel>
+			<TextBlock VerticalAlignment="Top"
+					   Text="{Binding Content}"
+					   TextWrapping="Wrap" />
+		</StackPanel>
+	</Grid>
 </UserControl>

@@ -61,7 +61,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             {
                 new("message-1", alex, DateTimeOffset.Now.AddMinutes(-30), "This is a message."),
                 new("message-2", sam, DateTimeOffset.Now.AddMinutes(-25), "Another message for the channel."),
-                new("message-3", alex, DateTimeOffset.Now.AddMinutes(-10), "We should test the new layout."),
+                new("message-3", alex, DateTimeOffset.Now.AddMinutes(-10), "We should test the \nnew layout."),
             });
 
         var random = new ChannelModel(
@@ -69,7 +69,14 @@ public sealed class MainWindowViewModel : ViewModelBase
             "random",
             new ObservableCollection<MessageModel>
             {
-                new("message-4", sam, DateTimeOffset.Now.AddMinutes(-5), "Random chat keeps the vibe light."),
+                new("message-4", sam, DateTimeOffset.Now.AddMinutes(-5), @"Random chat keeps the vibe light.
+rwerwerw
+rw
+er
+wer
+w
+r
+ztr5z56j7u5"),
             });
 
         var music = new ChannelModel(
@@ -78,13 +85,13 @@ public sealed class MainWindowViewModel : ViewModelBase
             new ObservableCollection<MessageModel>());
 
         var server = new ServerModel(
-            "server-1",
-            "Server",
+            "echo.voidcube.cloud",
+            "echo.voidcube.cloud",
             new ObservableCollection<ChannelModel> { general, random });
 
         var anotherServer = new ServerModel(
-            "server-2",
-            "Another Server",
+            "echo.stone-red.net",
+            "echo.stone-red.net",
             new ObservableCollection<ChannelModel>() { general, music});
 
         return new[] { server, anotherServer };

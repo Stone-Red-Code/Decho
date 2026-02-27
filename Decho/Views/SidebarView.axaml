@@ -4,12 +4,13 @@
              xmlns:views="using:Decho.Views"
              x:Class="Decho.Views.SidebarView"
              x:DataType="vm:SidebarViewModel">
-    <Panel Background="{DynamicResource UiTheme00}" Width="250">
+    <Border Background="{DynamicResource UiTheme00}" Width="250" CornerRadius="0 6 0 0">
         <ScrollViewer Padding="5">
             <ItemsControl ItemsSource="{Binding Servers}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:ServerViewModel">
                         <Expander Padding="0"
+                                  Margin="0 0 0 6"
                                   HorizontalAlignment="Stretch"
                                   IsExpanded="{Binding IsExpanded}">
                             <Expander.Header>
@@ -25,5 +26,5 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
         </ScrollViewer>
-    </Panel>
+    </Border>
 </UserControl>
