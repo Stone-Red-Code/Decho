@@ -347,6 +347,16 @@ public sealed class ConnectionService : IDisposable
         _ = await entry.ApiClient.UpdateProfileAsync(new UpdateProfileRequest(displayName, bio, nickColor));
     }
 
+    public async Task<UserProfileDto?> GetUserProfileAsync(string serverUrl, string username)
+    {
+        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
+        {
+            return null;
+        }
+
+        return await entry.ApiClient.GetUserProfileAsync(username);
+    }
+
     public async Task SetAvatarAsync(string serverUrl, string target)
     {
         if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))

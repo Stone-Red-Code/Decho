@@ -2,6 +2,7 @@ using Avalonia.Controls;
 
 using Decho.Models;
 using Decho.Services;
+using Decho.Views;
 
 using EchoHub.Client.Commands;
 using EchoHub.Client.Config;
@@ -333,7 +334,43 @@ public sealed class MainWindowViewModel : ViewModelBase
 
         _commandHandler.OnOpenProfile += async username =>
         {
-            StatusText = $"Profile: {username ?? "self"}";
+            string serverUrl = GetCurrentServerUrl();
+            if (string.IsNullOrEmpty(serverUrl))
+            {
+                return;
+            }
+
+            string target = username ?? ConnectionService.GetCurrentUsername(serverUrl) ?? string.Empty;
+            if (string.IsNullOrEmpty(target))
+            {
+                return;
+            }
+
+            try
+            {
+                UserProfileDto? profile = await ConnectionService.GetUserProfileAsync(serverUrl, target);
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    if (profile is null)
+                    {
+                        StatusText = "User not found";
+                        return;
+                    }
+
+                    ProfileWindow dialog = new ProfileWindow(profile);
+                    if (_mainWindow is not null)
+                    {
+                        _ = dialog.ShowDialog(_mainWindow);
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    StatusText = $"Failed to load profile: {ex.Message}";
+                });
+            }
         };
 
         _commandHandler.OnOpenServers += () =>

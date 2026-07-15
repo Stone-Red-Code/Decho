@@ -1,0 +1,72 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        mc:Ignorable="d"
+        x:Class="Decho.Views.ProfileWindow"
+        Title="Profile"
+        Width="380"
+        MinWidth="380"
+        MinHeight="280"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        Icon="/Assets/avalonia-logo.ico">
+    <Border Padding="15">
+        <DockPanel>
+            <Button DockPanel.Dock="Bottom"
+                    Content="Close"
+                    HorizontalAlignment="Right"
+                    Width="80"
+                    Margin="0 8 0 0"
+                    Click="OnCloseClick" />
+            <StackPanel Spacing="8">
+                <TextBlock x:Name="UsernameText" FontSize="20" FontWeight="Bold" />
+
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Ellipse x:Name="StatusDot" Width="10" Height="10" VerticalAlignment="Center" />
+                    <TextBlock x:Name="StatusText" VerticalAlignment="Center" />
+                </StackPanel>
+
+                <TextBlock x:Name="StatusMessageText"
+                           FontSize="12"
+                           Opacity="0.7"
+                           TextWrapping="Wrap"
+                           IsVisible="False" />
+
+                <Separator Margin="0 4" />
+
+                <Grid ColumnDefinitions="85, *">
+                    <TextBlock Text="Display Name:" FontWeight="SemiBold" />
+                    <TextBlock x:Name="DisplayNameText" Grid.Column="1" />
+                </Grid>
+
+                <Grid ColumnDefinitions="85, Auto, 10, *">
+                    <TextBlock Text="Color:" FontWeight="SemiBold" />
+                    <Border x:Name="ColorSwatch" Grid.Column="1"
+                            Width="16" Height="16" CornerRadius="3"
+                            BorderThickness="1" BorderBrush="{DynamicResource UiTheme08}" />
+                    <TextBlock x:Name="ColorText" Grid.Column="3" VerticalAlignment="Center" />
+                </Grid>
+
+                <Grid ColumnDefinitions="85, *">
+                    <TextBlock Text="Role:" FontWeight="SemiBold" />
+                    <TextBlock x:Name="RoleText" Grid.Column="1" />
+                </Grid>
+
+                <TextBlock Text="Bio:" FontWeight="SemiBold" />
+                <Border Background="{DynamicResource UiTheme00}" CornerRadius="4" Padding="8">
+                    <TextBlock x:Name="BioText" TextWrapping="Wrap" />
+                </Border>
+
+                <Grid ColumnDefinitions="85, *">
+                    <TextBlock Text="Joined:" FontWeight="SemiBold" />
+                    <TextBlock x:Name="JoinedText" Grid.Column="1" />
+                </Grid>
+                <Grid ColumnDefinitions="85, *">
+                    <TextBlock Text="Last seen:" FontWeight="SemiBold" />
+                    <TextBlock x:Name="LastSeenText" Grid.Column="1" />
+                </Grid>
+            </StackPanel>
+        </DockPanel>
+    </Border>
+</Window>
