@@ -2,6 +2,7 @@
 			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 			 xmlns:vm="using:Decho.ViewModels"
 			 xmlns:views="using:Decho.Views"
+			 xmlns:i="https://github.com/projektanker/icons.avalonia"
 			 x:Class="Decho.Views.SidebarView"
 			 x:DataType="vm:SidebarViewModel">
 	<Border Background="{DynamicResource UiTheme00}" Width="250" CornerRadius="0 6 0 0">
@@ -14,33 +15,45 @@
 								  HorizontalAlignment="Stretch"
 								  IsExpanded="{Binding IsExpanded}">
 							<Expander.Header>
-								<StackPanel Spacing="5">
-									<StackPanel Orientation="Horizontal" Spacing="5">
-										<Ellipse Width="8" Height="8"
-												 Fill="{Binding ConnectionStatusColor}"
-												 VerticalAlignment="Center" />
-										<TextBlock FontWeight="Bold"
-												   TextTrimming="CharacterEllipsis"
-												   MaxWidth="160"
-												   Padding="0"
-												   Text="{Binding Name}" />
+								<Grid ColumnDefinitions="*, Auto">
+									<StackPanel Spacing="5">
+										<StackPanel Orientation="Horizontal" Spacing="5">
+											<Ellipse Width="8" Height="8"
+													 Fill="{Binding ConnectionStatusColor}"
+													 VerticalAlignment="Center" />
+											<TextBlock FontWeight="Bold"
+													   TextTrimming="CharacterEllipsis"
+													   MaxWidth="160"
+													   Padding="0"
+													   Text="{Binding Name}" />
+										</StackPanel>
+										<TextBlock FontSize="10"
+												   Text="{Binding ConnectionStatusText}"
+												   Opacity="0.6"
+												   VerticalAlignment="Center" />
 									</StackPanel>
-									<TextBlock FontSize="10"
-											   Text="{Binding ConnectionStatusText}"
-											   Opacity="0.6"
-											   VerticalAlignment="Center" />
-								</StackPanel>
+									<Button Grid.Column="1"
+											x:Name="SettingsButton"
+											Background="Transparent"
+											Foreground="{DynamicResource UiTheme08}"
+											VerticalAlignment="Center"
+											i:Attached.Icon="fa-cog"
+											Click="OnSettingsClicked">
+										<Button.ContextMenu>
+											<ContextMenu>
+												<MenuItem Header="Disconnect"
+														  Command="{Binding DisconnectCommand}" />
+												<MenuItem Header="Remove Server"
+														  Command="{Binding RemoveCommand}" />
+											</ContextMenu>
+										</Button.ContextMenu>
+									</Button>
+								</Grid>
 							</Expander.Header>
 							<StackPanel>
 								<Button Content="Connect"
 										Command="{Binding ConnectCommand}"
 										IsVisible="{Binding ShowConnectionControls}"
-										Margin="4"
-										Padding="5 2"
-										HorizontalAlignment="Stretch" />
-								<Button Content="Disconnect"
-										Command="{Binding DisconnectCommand}"
-										IsVisible="{Binding IsConnected}"
 										Margin="4"
 										Padding="5 2"
 										HorizontalAlignment="Stretch" />

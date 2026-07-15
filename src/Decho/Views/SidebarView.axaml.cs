@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Interactivity;
 
 using Decho.ViewModels;
 
@@ -21,5 +22,13 @@ public partial class SidebarView : UserControl
     public SidebarView()
     {
         InitializeComponent();
+    }
+
+    private void OnSettingsClicked(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button button)
+        {
+            button.ContextMenu?.Open(button);
+        }
     }
 }

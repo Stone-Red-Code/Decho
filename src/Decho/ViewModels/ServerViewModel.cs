@@ -19,6 +19,12 @@ public sealed class ServerViewModel : ViewModelBase
         remove => _disconnectRequested = (Func<Task>?)Delegate.Remove(_disconnectRequested, value);
     }
 
+    public event Func<Task>? RemoveRequested
+    {
+        add => _removeRequested = (Func<Task>?)Delegate.Combine(_removeRequested, value);
+        remove => _removeRequested = (Func<Task>?)Delegate.Remove(_removeRequested, value);
+    }
+
     private bool _isConnected;
     private bool _isConnecting;
     private string? _connectedUser;
@@ -26,6 +32,8 @@ public sealed class ServerViewModel : ViewModelBase
     private Func<Task>? _connectRequested;
 
     private Func<Task>? _disconnectRequested;
+
+    private Func<Task>? _removeRequested;
 
     public ServerModel Model { get; }
 
@@ -38,6 +46,8 @@ public sealed class ServerViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> ConnectCommand { get; }
 
     public ReactiveCommand<Unit, Unit> DisconnectCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> RemoveCommand { get; }
 
     public ChannelViewModel? SelectedChannel
     {
@@ -124,6 +134,7 @@ public sealed class ServerViewModel : ViewModelBase
 
         ConnectCommand = ReactiveCommand.CreateFromTask(ConnectAsync);
         DisconnectCommand = ReactiveCommand.CreateFromTask(DisconnectAsync);
+        RemoveCommand = ReactiveCommand.CreateFromTask(RemoveAsync);
     }
 
     public void SyncFromModel()
@@ -147,6 +158,14 @@ public sealed class ServerViewModel : ViewModelBase
         if (_disconnectRequested is not null)
         {
             await _disconnectRequested();
+        }
+    }
+
+    private async Task RemoveAsync()
+    {
+        if (_removeRequested is not null)
+        {
+            await _removeRequested();
         }
     }
 }

@@ -79,6 +79,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         ServerViewModel serverVm = new ServerViewModel(placeholderServer);
         serverVm.ConnectRequested += async () => await HandleServerConnectRequested(serverVm);
         serverVm.DisconnectRequested += async () => await HandleServerDisconnectRequested(serverVm);
+        serverVm.RemoveRequested += async () => await HandleServerRemoveRequested(serverVm);
 
         Sidebar.Servers.Add(serverVm);
         StatusText = "Click Connect on the server to get started";
@@ -352,6 +353,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             ServerViewModel serverVm = new ServerViewModel(server);
             serverVm.ConnectRequested += () => HandleServerConnectRequested(serverVm);
             serverVm.DisconnectRequested += () => HandleServerDisconnectRequested(serverVm);
+            serverVm.RemoveRequested += () => HandleServerRemoveRequested(serverVm);
             _ = serverVm.WhenAnyValue(s => s.SelectedChannel)
                 .Where(channel => channel is not null)
                 .Subscribe(channel => Sidebar.SelectedChannel = channel!);
@@ -365,6 +367,11 @@ public sealed class MainWindowViewModel : ViewModelBase
                 }
 
                 Sidebar.Servers.Add(serverVm);
+                if (serverVm.Channels.Count > 0)
+                {
+                    serverVm.SelectedChannel = serverVm.Channels[0];
+                }
+
                 StatusText = $"Connected to {server.Name}";
             });
         };
@@ -390,6 +397,11 @@ public sealed class MainWindowViewModel : ViewModelBase
                 if (serverVm is not null)
                 {
                     serverVm.SyncFromModel();
+                    if (string.Equals(server.ServerUrl, Chat.CurrentServerUrl, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Chat.Composer.IsConnected = server.IsConnected;
+                    }
+
                     if (!server.IsConnected)
                     {
                         StatusText = $"Disconnected from {server.Name}";
@@ -493,11 +505,12 @@ public sealed class MainWindowViewModel : ViewModelBase
         }
 
         string serverUrl = FindServerUrlForChannel(channel);
-        Chat.SetChannel(channel, serverUrl);
+        bool isServerConnected = Sidebar.GetServer(serverUrl)?.IsConnected ?? false;
+        Chat.SetChannel(channel, serverUrl, isServerConnected);
 
         if (!string.IsNullOrEmpty(serverUrl))
         {
-            Chat.SetComposerCommandHandler(new CommandHandler());
+            Chat.Composer.SetCommandHandler(new CommandHandler());
 
             _ = Task.Run(async () =>
             {
@@ -538,6 +551,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             ServerViewModel serverVm = new ServerViewModel(placeholderServer);
             serverVm.ConnectRequested += async () => await HandleServerConnectRequested(serverVm);
             serverVm.DisconnectRequested += async () => await HandleServerDisconnectRequested(serverVm);
+            serverVm.RemoveRequested += async () => await HandleServerRemoveRequested(serverVm);
 
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
@@ -639,6 +653,18 @@ public sealed class MainWindowViewModel : ViewModelBase
         catch (Exception ex)
         {
             StatusText = $"Disconnect error: {ex.Message}";
+        }
+    }
+
+    private async Task HandleServerRemoveRequested(ServerViewModel serverVm)
+    {
+        try
+        {
+            await ConnectionService.RemoveServerAsync(serverVm.ServerUrl);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Remove error: {ex.Message}";
         }
     }
 

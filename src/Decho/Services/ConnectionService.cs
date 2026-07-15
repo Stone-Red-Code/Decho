@@ -137,14 +137,43 @@ public sealed class ConnectionService : IDisposable
 
         entry.Server.IsConnected = false;
         entry.Server.IsConnecting = false;
-        ServerStateChanged?.Invoke(entry.Server);
 
         await entry.Manager.CleanupAsync();
         entry.ApiClient.Dispose();
         await entry.Manager.DisposeAsync();
 
         _ = _connections.Remove(serverUrl);
+        ServerStateChanged?.Invoke(entry.Server);
+    }
+
+    public async Task RemoveServerAsync(string serverUrl)
+    {
+        if (_connections.TryGetValue(serverUrl, out ServerConnection? entry))
+        {
+            entry.Server.IsConnected = false;
+            entry.Server.IsConnecting = false;
+
+            await entry.Manager.CleanupAsync();
+            entry.ApiClient.Dispose();
+            await entry.Manager.DisposeAsync();
+
+            _ = _connections.Remove(serverUrl);
+        }
+
+        RemoveServerFromConfig(serverUrl);
         ServerRemoved?.Invoke(serverUrl);
+    }
+
+    private static void RemoveServerFromConfig(string serverUrl)
+    {
+        ClientConfig config = ConfigManager.Load();
+        SavedServer? saved = config.SavedServers.FirstOrDefault(s =>
+            string.Equals(s.Url, serverUrl, StringComparison.OrdinalIgnoreCase));
+        if (saved is not null)
+        {
+            _ = config.SavedServers.Remove(saved);
+            ConfigManager.Save(config);
+        }
     }
 
     public async Task SendMessageAsync(string serverUrl, string channelName, string content)

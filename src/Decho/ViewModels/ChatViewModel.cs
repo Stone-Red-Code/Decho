@@ -1,5 +1,3 @@
-using EchoHub.Client.Commands;
-
 using System.Collections.ObjectModel;
 
 namespace Decho.ViewModels;
@@ -45,7 +43,7 @@ public sealed class ChatViewModel : ViewModelBase
         Composer = new MessageComposerViewModel();
     }
 
-    public void SetChannel(ChannelViewModel? channel, string serverUrl = "")
+    public void SetChannel(ChannelViewModel? channel, string serverUrl = "", bool isServerConnected = true)
     {
         if (channel is null)
         {
@@ -55,7 +53,7 @@ public sealed class ChatViewModel : ViewModelBase
             HasTopic = false;
             CurrentChannelName = string.Empty;
             CurrentServerUrl = string.Empty;
-            Composer.SetServer(string.Empty);
+            Composer.SetServer(string.Empty, isServerConnected);
             return;
         }
 
@@ -65,12 +63,7 @@ public sealed class ChatViewModel : ViewModelBase
         HasTopic = channel.HasTopic;
         CurrentChannelName = channel.Name;
         CurrentServerUrl = serverUrl;
-        Composer.SetServer(serverUrl);
-    }
-
-    public void SetComposerCommandHandler(CommandHandler handler)
-    {
-        Composer.SetCommandHandler(handler);
+        Composer.SetServer(serverUrl, isServerConnected);
     }
 
     public void ClearMessages()

@@ -22,6 +22,12 @@ public sealed class MessageComposerViewModel : ViewModelBase
 
     public string ServerUrl { get; private set; } = string.Empty;
 
+    public bool IsConnected
+    {
+        get;
+        set => this.RaiseAndSetIfChanged(ref field, value);
+    } = true;
+
     public ReactiveCommand<Unit, Unit> SendCommand { get; }
 
     public bool HasCommandHandler => _commandHandler is not null;
@@ -40,9 +46,10 @@ public sealed class MessageComposerViewModel : ViewModelBase
         }
     }
 
-    public void SetServer(string serverUrl)
+    public void SetServer(string serverUrl, bool isConnected = true)
     {
         ServerUrl = serverUrl;
+        IsConnected = isConnected;
     }
 
     public void SetCommandHandler(CommandHandler handler)
