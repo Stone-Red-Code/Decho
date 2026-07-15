@@ -35,60 +35,9 @@ public sealed class ConnectionService : IDisposable
     private readonly Dictionary<string, ServerConnection> _connections = new(StringComparer.OrdinalIgnoreCase);
     internal IReadOnlyDictionary<string, ServerConnection> Connections => _connections;
 
-    public async Task<ServerModel> ConnectAsync(string serverUrl, string username, string password, bool isRegister, bool rememberMe)
+    private async Task<ServerModel> ConnectCoreAsync(ConnectDialogResult dialogResult)
     {
         ConnectionManager conn = new ConnectionManager();
-
-        ConnectDialogResult dialogResult = new EchoHub.Client.UI.Dialogs.ConnectDialogResult(
-            serverUrl, username, password, isRegister, rememberMe, null);
-
-        ConnectResult result;
-        try
-        {
-            result = await conn.ConnectAsync(dialogResult, _ => { });
-        }
-        catch
-        {
-            await conn.DisposeAsync();
-            throw;
-        }
-
-        LoginResponse login = result.Login;
-        UserModel userModel = new UserModel(login.Username, login.DisplayName ?? login.Username,
-            login.NicknameColor);
-
-        ObservableCollection<ChannelModel> channels = [];
-        ServerModel serverModel = new ServerModel(
-            Guid.NewGuid().ToString("N"),
-            new Uri(serverUrl).Host,
-            channels,
-            serverUrl,
-            isConnected: true,
-            connectedUser: login.Username);
-
-        ServerConnection serverEntry = new ServerConnection(conn, conn.Api!, serverModel, userModel);
-
-        foreach (ChannelDto ch in result.Channels)
-        {
-            ChannelModel channelModel = ChannelModelFromDto(ch);
-            channels.Add(channelModel);
-        }
-
-        WireConnectionEvents(serverEntry, conn);
-
-        _connections[serverUrl] = serverEntry;
-        SaveRefreshToken(serverUrl, rememberMe);
-        ServerAdded?.Invoke(serverModel);
-
-        return serverModel;
-    }
-
-    public async Task ConnectWithSavedTokenAsync(string serverUrl, string username, string refreshToken, bool rememberMe)
-    {
-        ConnectionManager conn = new ConnectionManager();
-
-        ConnectDialogResult dialogResult = new EchoHub.Client.UI.Dialogs.ConnectDialogResult(
-            serverUrl, username, "", false, rememberMe, refreshToken);
 
         ConnectResult result;
         try
@@ -107,9 +56,9 @@ public sealed class ConnectionService : IDisposable
         ObservableCollection<ChannelModel> channels = [];
         ServerModel serverModel = new ServerModel(
             Guid.NewGuid().ToString("N"),
-            new Uri(serverUrl).Host,
+            new Uri(dialogResult.ServerUrl).Host,
             channels,
-            serverUrl,
+            dialogResult.ServerUrl,
             isConnected: true,
             connectedUser: login.Username);
 
@@ -123,16 +72,32 @@ public sealed class ConnectionService : IDisposable
 
         WireConnectionEvents(serverEntry, conn);
 
-        _connections[serverUrl] = serverEntry;
-        SaveRefreshToken(serverUrl, rememberMe);
+        _connections[dialogResult.ServerUrl] = serverEntry;
+        SaveRefreshToken(dialogResult.ServerUrl, dialogResult.RememberMe);
         ServerAdded?.Invoke(serverModel);
+
+        return serverModel;
     }
 
-    public async Task DisconnectAsync(string serverUrl)
+    public async Task<ServerModel> ConnectAsync(string serverUrl, string username, string password, bool isRegister, bool rememberMe)
+    {
+        ConnectDialogResult dialogResult = new ConnectDialogResult(
+            serverUrl, username, password, isRegister, rememberMe, null);
+        return await ConnectCoreAsync(dialogResult);
+    }
+
+    public async Task ConnectWithSavedTokenAsync(string serverUrl, string username, string refreshToken, bool rememberMe)
+    {
+        ConnectDialogResult dialogResult = new ConnectDialogResult(
+            serverUrl, username, "", false, rememberMe, refreshToken);
+        await ConnectCoreAsync(dialogResult);
+    }
+
+    private async Task<ServerConnection?> CleanupConnectionAsync(string serverUrl)
     {
         if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
         {
-            return;
+            return null;
         }
 
         entry.Server.IsConnected = false;
@@ -143,37 +108,43 @@ public sealed class ConnectionService : IDisposable
         await entry.Manager.DisposeAsync();
 
         _ = _connections.Remove(serverUrl);
-        ServerStateChanged?.Invoke(entry.Server);
+        return entry;
+    }
+
+    public async Task DisconnectAsync(string serverUrl)
+    {
+        ServerConnection? entry = await CleanupConnectionAsync(serverUrl);
+        if (entry is not null)
+        {
+            ServerStateChanged?.Invoke(entry.Server);
+        }
     }
 
     public async Task RemoveServerAsync(string serverUrl)
     {
-        if (_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            entry.Server.IsConnected = false;
-            entry.Server.IsConnecting = false;
-
-            await entry.Manager.CleanupAsync();
-            entry.ApiClient.Dispose();
-            await entry.Manager.DisposeAsync();
-
-            _ = _connections.Remove(serverUrl);
-        }
-
+        await CleanupConnectionAsync(serverUrl);
         RemoveServerFromConfig(serverUrl);
         ServerRemoved?.Invoke(serverUrl);
     }
 
-    private static void RemoveServerFromConfig(string serverUrl)
+    private static void ModifyConfig(string serverUrl, Action<ClientConfig, SavedServer?> action)
     {
         ClientConfig config = ConfigManager.Load();
         SavedServer? saved = config.SavedServers.FirstOrDefault(s =>
             string.Equals(s.Url, serverUrl, StringComparison.OrdinalIgnoreCase));
-        if (saved is not null)
+        action(config, saved);
+        ConfigManager.Save(config);
+    }
+
+    private static void RemoveServerFromConfig(string serverUrl)
+    {
+        ModifyConfig(serverUrl, (config, saved) =>
         {
-            _ = config.SavedServers.Remove(saved);
-            ConfigManager.Save(config);
-        }
+            if (saved is not null)
+            {
+                _ = config.SavedServers.Remove(saved);
+            }
+        });
     }
 
     public async Task SendMessageAsync(string serverUrl, string channelName, string content)
@@ -554,25 +525,24 @@ public sealed class ConnectionService : IDisposable
             return;
         }
 
-        ClientConfig config = ConfigManager.Load();
-        SavedServer? saved = config.SavedServers.FirstOrDefault(s =>
-            string.Equals(s.Url, serverUrl, StringComparison.OrdinalIgnoreCase));
-        if (saved is null)
+        ModifyConfig(serverUrl, (config, saved) =>
         {
-            saved = new SavedServer
+            if (saved is null)
             {
-                Name = new Uri(serverUrl).Host,
-                Url = serverUrl,
-                Username = entry.User.Id,
-                RememberMe = true,
-                LastConnected = DateTimeOffset.Now,
-            };
-            config.SavedServers.Add(saved);
-        }
+                saved = new SavedServer
+                {
+                    Name = new Uri(serverUrl).Host,
+                    Url = serverUrl,
+                    Username = entry.User.Id,
+                    RememberMe = true,
+                    LastConnected = DateTimeOffset.Now,
+                };
+                config.SavedServers.Add(saved);
+            }
 
-        saved.RefreshToken = token;
-        saved.LastConnected = DateTimeOffset.Now;
-        ConfigManager.Save(config);
+            saved.RefreshToken = token;
+            saved.LastConnected = DateTimeOffset.Now;
+        });
     }
 
     private void WireConnectionEvents(ServerConnection entry, ConnectionManager conn)

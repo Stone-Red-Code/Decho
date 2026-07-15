@@ -74,14 +74,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     private async void AddServer()
     {
-        if (_mainWindow is null)
-        {
-            return;
-        }
-
-        ClientConfig config = ConfigManager.Load();
-        ConnectDialogWindow dialog = new ConnectDialogWindow(config.SavedServers);
-        ConnectDialogResult? result = await dialog.ShowDialog<ConnectDialogResult?>(_mainWindow);
+        ConnectDialogResult? result = await ShowConnectDialogAsync(null);
         if (result is null)
         {
             return;
@@ -127,6 +120,20 @@ public sealed class MainWindowViewModel : ViewModelBase
             LastConnected = DateTimeOffset.Now,
         };
         ConfigManager.SaveServer(savedServer);
+    }
+
+    private async Task<ConnectDialogResult?> ShowConnectDialogAsync(SavedServer? prefill)
+    {
+        if (_mainWindow is null)
+        {
+            return null;
+        }
+
+        ClientConfig config = ConfigManager.Load();
+        ConnectDialogWindow dialog = prefill is null
+            ? new ConnectDialogWindow(config.SavedServers)
+            : new ConnectDialogWindow(config.SavedServers, prefill);
+        return await dialog.ShowDialog<ConnectDialogResult?>(_mainWindow);
     }
 
     private void WireCommandHandlerEvents()
@@ -670,16 +677,9 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     private async Task HandleServerConnectRequested(ServerViewModel serverVm)
     {
-        if (_mainWindow is null)
-        {
-            return;
-        }
-
-        ClientConfig config = ConfigManager.Load();
-        SavedServer? prefill = config.SavedServers.FirstOrDefault(s =>
+        SavedServer? prefill = ConfigManager.Load().SavedServers.FirstOrDefault(s =>
             string.Equals(s.Url, serverVm.ServerUrl, StringComparison.OrdinalIgnoreCase));
-        ConnectDialogWindow dialog = new ConnectDialogWindow(config.SavedServers, prefill);
-        ConnectDialogResult? result = await dialog.ShowDialog<ConnectDialogResult?>(_mainWindow);
+        ConnectDialogResult? result = await ShowConnectDialogAsync(prefill);
         if (result is null)
         {
             return;

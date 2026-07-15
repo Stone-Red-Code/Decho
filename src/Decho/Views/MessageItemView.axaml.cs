@@ -44,8 +44,8 @@ public partial class MessageItemView : UserControl
     {
         try
         {
-            TopLevel? topLevel = TopLevel.GetTopLevel(this);
-            if (topLevel?.DataContext is not MainWindowViewModel mainVm)
+            MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
+            if (mainVm is null)
             {
                 return;
             }
@@ -73,13 +73,14 @@ public partial class MessageItemView : UserControl
 
     private async void OnAuthorNamePointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
     {
-        if (DataContext is not MessageViewModel msg)
+        MessageViewModel? msg = this.GetDataContext<MessageViewModel>();
+        if (msg is null)
         {
             return;
         }
 
-        TopLevel? topLevel = TopLevel.GetTopLevel(this);
-        if (topLevel?.DataContext is not MainWindowViewModel mainVm)
+        MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
+        if (mainVm is null)
         {
             return;
         }
@@ -94,7 +95,7 @@ public partial class MessageItemView : UserControl
 
         ProfileWindow dialog = new ProfileWindow(profile);
 
-        if (topLevel is Window parent)
+        if (TopLevel.GetTopLevel(this) is Window parent)
         {
             await dialog.ShowDialog(parent);
         }
@@ -102,7 +103,8 @@ public partial class MessageItemView : UserControl
 
     private async void OnDownloadClicked(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is not MessageViewModel msg)
+        MessageViewModel? msg = this.GetDataContext<MessageViewModel>();
+        if (msg is null)
         {
             return;
         }
@@ -118,7 +120,8 @@ public partial class MessageItemView : UserControl
             return;
         }
 
-        if (topLevel.DataContext is not MainWindowViewModel mainVm)
+        MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
+        if (mainVm is null)
         {
             return;
         }

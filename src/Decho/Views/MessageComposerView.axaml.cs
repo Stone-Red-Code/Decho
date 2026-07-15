@@ -19,7 +19,8 @@ public partial class MessageComposerView : UserControl
 
     private async void OnFileUploadClicked(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is not MessageComposerViewModel vm)
+        MessageComposerViewModel? vm = this.GetDataContext<MessageComposerViewModel>();
+        if (vm is null)
         {
             return;
         }
@@ -55,7 +56,8 @@ public partial class MessageComposerView : UserControl
 
     private void OnDrop(object? sender, DragEventArgs e)
     {
-        if (DataContext is not MessageComposerViewModel vm)
+        MessageComposerViewModel? vm = this.GetDataContext<MessageComposerViewModel>();
+        if (vm is null)
         {
             return;
         }
