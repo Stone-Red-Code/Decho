@@ -51,9 +51,9 @@ public sealed class MessageViewModel(MessageModel model) : ViewModelBase
     {
         get
         {
-            DateTimeOffset now = DateTimeOffset.Now;
+            DateTimeOffset now = DateTimeOffset.Now.ToLocalTime();
 
-            if (Model.SentAt.Date == now.Date)
+            if (Model.SentAt.ToLocalTime().Date == now.Date)
             {
                 return Model.SentAt.ToLocalTime().ToString("t");
             }
