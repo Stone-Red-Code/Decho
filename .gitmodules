@@ -1,3 +1,3 @@
-[submodule "EchoHub"]
-	path = EchoHub
+[submodule "src/EchoHub"]
+	path = src/EchoHub
 	url = https://github.com/HueByte/EchoHub.git
