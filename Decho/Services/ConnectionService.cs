@@ -388,7 +388,18 @@ public sealed class ConnectionService : IDisposable
     {
         if (!_connections.TryGetValue(serverUrl, out var entry))
             return null;
-        return await entry.ApiClient.DownloadBytesAsync(relativeUrl);
+        try
+        {
+            var tempPath = await entry.ApiClient.DownloadFileToTempAsync(relativeUrl, "image");
+            if (tempPath is null) return null;
+            var bytes = await File.ReadAllBytesAsync(tempPath);
+            try { File.Delete(tempPath); } catch { }
+            return bytes;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public string? GetCurrentUsername(string serverUrl)

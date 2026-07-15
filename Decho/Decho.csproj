@@ -34,7 +34,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\EchoHub\src\EchoHub.Client\EchoHub.Client.csproj" />
-    <ProjectReference Include="..\..\EchoHub\src\EchoHub.Core\EchoHub.Core.csproj" />
+    <ProjectReference Include="..\EchoHub\src\EchoHub.Client\EchoHub.Client.csproj" />
+    <ProjectReference Include="..\EchoHub\src\EchoHub.Core\EchoHub.Core.csproj" />
   </ItemGroup>
 </Project>

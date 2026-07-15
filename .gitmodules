@@ -1,0 +1,3 @@
+[submodule "EchoHub"]
+	path = EchoHub
+	url = https://github.com/HueByte/EchoHub.git
