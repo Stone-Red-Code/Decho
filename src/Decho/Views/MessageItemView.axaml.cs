@@ -5,6 +5,8 @@ using Avalonia.Platform.Storage;
 
 using Decho.ViewModels;
 
+using EchoHub.Core.DTOs;
+
 namespace Decho.Views;
 
 public partial class MessageItemView : UserControl
@@ -66,6 +68,35 @@ public partial class MessageItemView : UserControl
         catch
         {
             // Image failed to load — filename is shown as fallback
+        }
+    }
+
+    private async void OnAuthorNamePointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+    {
+        if (DataContext is not MessageViewModel msg)
+        {
+            return;
+        }
+
+        TopLevel? topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel?.DataContext is not MainWindowViewModel mainVm)
+        {
+            return;
+        }
+
+        string serverUrl = msg.ServerUrl ?? mainVm.Chat.CurrentServerUrl;
+        string username = msg.Model.Author.Id;
+        UserProfileDto? profile = await mainVm.ConnectionService.GetUserProfileAsync(serverUrl, username);
+        if (profile is null)
+        {
+            return;
+        }
+
+        ProfileWindow dialog = new ProfileWindow(profile);
+
+        if (topLevel is Window parent)
+        {
+            await dialog.ShowDialog(parent);
         }
     }
 

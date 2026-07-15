@@ -15,7 +15,9 @@
 				<TextBlock VerticalAlignment="Top"
 						   Text="{Binding AuthorName}"
 						   FontWeight="Bold"
-						   Foreground="{Binding AuthorColor}" />
+						   Foreground="{Binding AuthorColor}"
+						   Cursor="Hand"
+						   PointerPressed="OnAuthorNamePointerPressed" />
 				<TextBlock VerticalAlignment="Top"
 						   Text="{Binding TimeText}"
 						   FontSize="10"
