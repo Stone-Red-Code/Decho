@@ -10,6 +10,9 @@ using EchoHub.Core.Constants;
 using EchoHub.Core.DTOs;
 using EchoHub.Core.Models;
 
+using MsBox.Avalonia;
+using MsBox.Avalonia.Enums;
+
 using System.Reactive;
 using System.Reactive.Linq;
 
@@ -69,21 +72,61 @@ public sealed class MainWindowViewModel : ViewModelBase
         ConnectionService.Dispose();
     }
 
-    private void AddServer()
+    private async void AddServer()
     {
-        ServerModel placeholderServer = new ServerModel(
-            Guid.NewGuid().ToString("N"),
-            "New Server",
-            [],
-            isConnected: false);
+        if (_mainWindow is null)
+        {
+            return;
+        }
 
-        ServerViewModel serverVm = new ServerViewModel(placeholderServer);
-        serverVm.ConnectRequested += async () => await HandleServerConnectRequested(serverVm);
-        serverVm.DisconnectRequested += async () => await HandleServerDisconnectRequested(serverVm);
-        serverVm.RemoveRequested += async () => await HandleServerRemoveRequested(serverVm);
+        ClientConfig config = ConfigManager.Load();
+        ConnectDialogWindow dialog = new ConnectDialogWindow(config.SavedServers);
+        ConnectDialogResult? result = await dialog.ShowDialog<ConnectDialogResult?>(_mainWindow);
+        if (result is null)
+        {
+            return;
+        }
 
-        Sidebar.Servers.Add(serverVm);
-        StatusText = "Click Connect on the server to get started";
+        try
+        {
+            await ConnectAndSaveAsync(result);
+        }
+        catch (Exception ex)
+        {
+            var box = MessageBoxManager.GetMessageBoxStandard(
+                "Connection Failed",
+                $"Could not connect to server:\n{ex.Message}",
+                ButtonEnum.Ok);
+            await box.ShowWindowDialogAsync(_mainWindow);
+        }
+    }
+
+    private async Task ConnectAndSaveAsync(ConnectDialogResult result)
+    {
+        StatusText = "Connecting...";
+
+        if (result.IsSavedSession && result.SavedRefreshToken is not null)
+        {
+            await ConnectionService.ConnectWithSavedTokenAsync(
+                result.ServerUrl, result.Username, result.SavedRefreshToken, result.RememberMe);
+        }
+        else
+        {
+            _ = await ConnectionService.ConnectAsync(
+                result.ServerUrl, result.Username, result.Password, result.IsRegister, result.RememberMe);
+        }
+
+        string? refreshToken = ConnectionService.GetRefreshToken(result.ServerUrl);
+        SavedServer savedServer = new SavedServer
+        {
+            Name = new Uri(result.ServerUrl).Host,
+            Url = result.ServerUrl,
+            Username = result.Username,
+            RefreshToken = result.RememberMe ? refreshToken : null,
+            RememberMe = result.RememberMe,
+            LastConnected = DateTimeOffset.Now,
+        };
+        ConfigManager.SaveServer(savedServer);
     }
 
     private void WireCommandHandlerEvents()
@@ -397,13 +440,15 @@ public sealed class MainWindowViewModel : ViewModelBase
 
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
+                int insertIndex = Sidebar.Servers.Count;
                 ServerViewModel? existing = Sidebar.GetServer(server.ServerUrl);
                 if (existing is not null)
                 {
+                    insertIndex = Sidebar.Servers.IndexOf(existing);
                     _ = Sidebar.Servers.Remove(existing);
                 }
 
-                Sidebar.Servers.Add(serverVm);
+                Sidebar.Servers.Insert(insertIndex, serverVm);
                 if (serverVm.Channels.Count > 0)
                 {
                     serverVm.SelectedChannel = serverVm.Channels[0];
@@ -625,7 +670,6 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     private async Task HandleServerConnectRequested(ServerViewModel serverVm)
     {
-        // Show connect dialog
         if (_mainWindow is null)
         {
             return;
@@ -644,34 +688,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         try
         {
             serverVm.IsConnecting = true;
-            StatusText = "Connecting...";
-
-            if (result.IsSavedSession && result.SavedRefreshToken is not null)
-            {
-                await ConnectionService.ConnectWithSavedTokenAsync(
-                    result.ServerUrl, result.Username, result.SavedRefreshToken, result.RememberMe);
-            }
-            else
-            {
-                _ = await ConnectionService.ConnectAsync(
-                    result.ServerUrl, result.Username, result.Password, result.IsRegister, result.RememberMe);
-            }
-
-            // Remove the placeholder and let the real server added event handle it
-            Sidebar.RemoveServer(serverVm.ServerUrl);
-
-            // Save to config with refresh token
-            string? refreshToken = ConnectionService.GetRefreshToken(result.ServerUrl);
-            SavedServer savedServer = new SavedServer
-            {
-                Name = new Uri(result.ServerUrl).Host,
-                Url = result.ServerUrl,
-                Username = result.Username,
-                RefreshToken = result.RememberMe ? refreshToken : null,
-                RememberMe = result.RememberMe,
-                LastConnected = DateTimeOffset.Now,
-            };
-            ConfigManager.SaveServer(savedServer);
+            await ConnectAndSaveAsync(result);
         }
         catch (Exception ex)
         {

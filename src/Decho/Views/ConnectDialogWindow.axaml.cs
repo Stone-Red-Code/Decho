@@ -2,6 +2,9 @@ using Avalonia.Controls;
 
 using EchoHub.Client.Config;
 
+using MsBox.Avalonia;
+using MsBox.Avalonia.Enums;
+
 using System.Linq;
 
 namespace Decho.Views;
@@ -16,7 +19,7 @@ public sealed partial class ConnectDialogWindow : Window
         _savedServers = [];
     }
 
-    public ConnectDialogWindow(List<SavedServer> savedServers, SavedServer? prefill)
+    public ConnectDialogWindow(List<SavedServer> savedServers, SavedServer? prefill = null)
     {
         InitializeComponent();
         _savedServers = savedServers;
@@ -66,7 +69,8 @@ public sealed partial class ConnectDialogWindow : Window
 
         if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(user))
         {
-            await ShowMessageBox("Validation", "Server URL and username are required.");
+            var box = MessageBoxManager.GetMessageBoxStandard("Validation", "Server URL and username are required.", ButtonEnum.Ok);
+            await box.ShowWindowDialogAsync(this);
             return;
         }
 
@@ -90,7 +94,8 @@ public sealed partial class ConnectDialogWindow : Window
         {
             if (string.IsNullOrEmpty(pass))
             {
-                await ShowMessageBox("Validation", "Password is required.");
+                var box = MessageBoxManager.GetMessageBoxStandard("Validation", "Password is required.", ButtonEnum.Ok);
+                await box.ShowWindowDialogAsync(this);
                 return;
             }
 
@@ -105,7 +110,7 @@ public sealed partial class ConnectDialogWindow : Window
         }
     }
 
-    private void OnRegisterClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    private async void OnRegisterClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         string url = UrlBox.Text?.Trim() ?? "";
         string user = UserBox.Text?.Trim() ?? "";
@@ -113,7 +118,8 @@ public sealed partial class ConnectDialogWindow : Window
 
         if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(user) || string.IsNullOrEmpty(pass))
         {
-            _ = ShowMessageBox("Validation", "Server URL, username, and password are required.");
+            var box = MessageBoxManager.GetMessageBoxStandard("Validation", "Server URL, username, and password are required.", ButtonEnum.Ok);
+            await box.ShowWindowDialogAsync(this);
             return;
         }
 
@@ -130,31 +136,6 @@ public sealed partial class ConnectDialogWindow : Window
     private void OnCancelClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         Close(null);
-    }
-
-    private async Task ShowMessageBox(string title, string message)
-    {
-        Window msgBox = new Window
-        {
-            Title = title,
-            Width = 350,
-            Height = 150,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            CanResize = false,
-        };
-
-        StackPanel stack = new StackPanel { Spacing = 10, Margin = new Avalonia.Thickness(15) };
-        stack.Children.Add(new TextBlock { Text = message, TextWrapping = Avalonia.Media.TextWrapping.Wrap });
-        Button okBtn = new Button { Content = "OK", HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center };
-        stack.Children.Add(okBtn);
-        msgBox.Content = stack;
-
-        TaskCompletionSource tcs = new TaskCompletionSource();
-        okBtn.Click += (_, _) => { msgBox.Close(); _ = tcs.TrySetResult(); };
-        msgBox.Closed += (_, _) => tcs.TrySetResult();
-
-        await msgBox.ShowDialog(this);
-        await tcs.Task;
     }
 }
 
