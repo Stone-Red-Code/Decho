@@ -2,29 +2,15 @@ using EchoHub.Core.Models;
 
 namespace Decho.Models;
 
-public sealed class UserModel
+public sealed class UserModel(string id, string displayName, string? nicknameColor = null, UserStatus status = UserStatus.Online, string? statusMessage = null)
 {
-    public UserModel(
-        string id,
-        string displayName,
-        string? nicknameColor = null,
-        UserStatus status = UserStatus.Online,
-        string? statusMessage = null)
-    {
-        Id = id;
-        DisplayName = displayName;
-        NicknameColor = nicknameColor;
-        Status = status;
-        StatusMessage = statusMessage;
-    }
+    public string Id { get; } = id;
 
-    public string Id { get; }
+    public string DisplayName { get; } = displayName;
 
-    public string DisplayName { get; }
+    public string? NicknameColor { get; set; } = nicknameColor;
 
-    public string? NicknameColor { get; set; }
+    public UserStatus Status { get; set; } = status;
 
-    public UserStatus Status { get; set; }
-
-    public string? StatusMessage { get; set; }
+    public string? StatusMessage { get; set; } = statusMessage;
 }

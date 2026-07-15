@@ -1,18 +1,14 @@
-using System;
 using Avalonia.Media;
-using EchoHub.Core.Models;
+
 using Decho.Models;
+
+using EchoHub.Core.Models;
 
 namespace Decho.ViewModels;
 
-public sealed class MessageViewModel : ViewModelBase
+public sealed class MessageViewModel(MessageModel model) : ViewModelBase
 {
-    public MessageViewModel(MessageModel model)
-    {
-        Model = model;
-    }
-
-    public MessageModel Model { get; }
+    public MessageModel Model { get; } = model;
 
     public string AuthorName => Model.Author.DisplayName;
 
@@ -20,8 +16,12 @@ public sealed class MessageViewModel : ViewModelBase
     {
         get
         {
-            var color = Model.Author.NicknameColor;
-            if (string.IsNullOrEmpty(color)) return null;
+            string? color = Model.Author.NicknameColor;
+            if (string.IsNullOrEmpty(color))
+            {
+                return null;
+            }
+
             try { return new SolidColorBrush(Avalonia.Media.Color.Parse(color)); }
             catch { return null; }
         }
@@ -51,7 +51,7 @@ public sealed class MessageViewModel : ViewModelBase
     {
         get
         {
-            var now = DateTimeOffset.Now;
+            DateTimeOffset now = DateTimeOffset.Now;
 
             if (Model.SentAt.Date == now.Date)
             {

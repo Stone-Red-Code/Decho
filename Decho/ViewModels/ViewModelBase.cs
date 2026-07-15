@@ -1,6 +1,4 @@
-﻿using ReactiveUI;
-
-namespace Decho.ViewModels;
+﻿namespace Decho.ViewModels;
 
 public abstract class ViewModelBase : ReactiveObject
 {

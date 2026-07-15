@@ -1,20 +1,12 @@
-using System.Collections.ObjectModel;
-using System.Linq;
-
 using Decho.Models;
+
+using System.Collections.ObjectModel;
 
 namespace Decho.ViewModels;
 
-public sealed class ChannelViewModel : ViewModelBase
+public sealed class ChannelViewModel(ChannelModel model) : ViewModelBase
 {
-    public ChannelViewModel(ChannelModel model)
-    {
-        Model = model;
-        Messages = new ObservableCollection<MessageViewModel>(
-            model.Messages.Select(message => new MessageViewModel(message)));
-    }
-
-    public ChannelModel Model { get; }
+    public ChannelModel Model { get; } = model;
 
     public string Name => Model.Name;
 
@@ -36,7 +28,8 @@ public sealed class ChannelViewModel : ViewModelBase
 
     public bool IsPublic => Model.IsPublic;
 
-    public ObservableCollection<MessageViewModel> Messages { get; }
+    public ObservableCollection<MessageViewModel> Messages { get; } = new ObservableCollection<MessageViewModel>(
+            model.Messages.Select(message => new MessageViewModel(message)));
 
     public void ClearMessages()
     {
@@ -48,10 +41,5 @@ public sealed class ChannelViewModel : ViewModelBase
     {
         Model.Messages.Add(message);
         Messages.Add(new MessageViewModel(message));
-    }
-
-    public void AddMessageViewModel(MessageViewModel messageViewModel)
-    {
-        Messages.Add(messageViewModel);
     }
 }

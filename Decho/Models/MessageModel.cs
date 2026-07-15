@@ -2,49 +2,25 @@ using EchoHub.Core.Models;
 
 namespace Decho.Models;
 
-public sealed class MessageModel
+public sealed class MessageModel(string id, UserModel author, DateTimeOffset sentAt, string content, string channelName, string? serverUrl = null, MessageType type = MessageType.Text, string? attachmentUrl = null, string? attachmentFileName = null, long? attachmentFileSize = null)
 {
-    public MessageModel(
-        string id,
-        UserModel author,
-        DateTimeOffset sentAt,
-        string content,
-        string channelName,
-        string? serverUrl = null,
-        MessageType type = MessageType.Text,
-        string? attachmentUrl = null,
-        string? attachmentFileName = null,
-        long? attachmentFileSize = null)
-    {
-        Id = id;
-        Author = author;
-        SentAt = sentAt;
-        Content = content;
-        ChannelName = channelName;
-        ServerUrl = serverUrl;
-        Type = type;
-        AttachmentUrl = attachmentUrl;
-        AttachmentFileName = attachmentFileName;
-        AttachmentFileSize = attachmentFileSize;
-    }
+    public string Id { get; } = id;
 
-    public string Id { get; }
+    public UserModel Author { get; } = author;
 
-    public UserModel Author { get; }
+    public DateTimeOffset SentAt { get; } = sentAt;
 
-    public DateTimeOffset SentAt { get; }
+    public string Content { get; } = content;
 
-    public string Content { get; }
+    public string ChannelName { get; } = channelName;
 
-    public string ChannelName { get; }
+    public string? ServerUrl { get; } = serverUrl;
 
-    public string? ServerUrl { get; }
+    public MessageType Type { get; } = type;
 
-    public MessageType Type { get; }
+    public string? AttachmentUrl { get; } = attachmentUrl;
 
-    public string? AttachmentUrl { get; }
+    public string? AttachmentFileName { get; } = attachmentFileName;
 
-    public string? AttachmentFileName { get; }
-
-    public long? AttachmentFileSize { get; }
+    public long? AttachmentFileSize { get; } = attachmentFileSize;
 }

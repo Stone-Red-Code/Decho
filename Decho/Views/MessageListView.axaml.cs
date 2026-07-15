@@ -1,7 +1,9 @@
-using System.Collections.Specialized;
 using Avalonia.Controls;
 using Avalonia.Threading;
+
 using Decho.ViewModels;
+
+using System.Collections.Specialized;
 
 namespace Decho.Views;
 
@@ -25,17 +27,15 @@ public partial class MessageListView : UserControl
             _chat.PropertyChanged -= OnViewModelPropertyChanged;
         }
 
-        var scroll = this.FindControl<ScrollViewer>("MessageScrollViewer");
-        if (scroll is not null)
-            scroll.ScrollChanged -= OnScrollChanged;
+        ScrollViewer? scroll = this.FindControl<ScrollViewer>("MessageScrollViewer");
+        scroll?.ScrollChanged -= OnScrollChanged;
 
         _chat = DataContext as ChatViewModel;
         if (_chat is not null)
         {
             _chat.Messages.CollectionChanged += OnMessagesChanged;
             _chat.PropertyChanged += OnViewModelPropertyChanged;
-            if (scroll is not null)
-                scroll.ScrollChanged += OnScrollChanged;
+            scroll?.ScrollChanged += OnScrollChanged;
         }
     }
 
@@ -43,11 +43,11 @@ public partial class MessageListView : UserControl
     {
         if (e.ExtentDelta.Y > 0 && _wasAtBottom)
         {
-            var scroll = (ScrollViewer)sender!;
+            ScrollViewer scroll = (ScrollViewer)sender!;
             Dispatcher.UIThread.Post(scroll.ScrollToEnd, DispatcherPriority.Background);
         }
 
-        var scrollViewer = (ScrollViewer)sender!;
+        ScrollViewer scrollViewer = (ScrollViewer)sender!;
         _wasAtBottom = scrollViewer.Offset.Y + scrollViewer.Viewport.Height >= scrollViewer.Extent.Height - 30;
     }
 
@@ -70,8 +70,11 @@ public partial class MessageListView : UserControl
 
     private void TryAutoScroll()
     {
-        var scroll = this.FindControl<ScrollViewer>("MessageScrollViewer");
-        if (scroll is null) return;
+        ScrollViewer? scroll = this.FindControl<ScrollViewer>("MessageScrollViewer");
+        if (scroll is null)
+        {
+            return;
+        }
 
         _wasAtBottom = scroll.Offset.Y + scroll.Viewport.Height >= scroll.Extent.Height - 30;
         if (_wasAtBottom && !_hasPendingScroll)
@@ -87,8 +90,11 @@ public partial class MessageListView : UserControl
 
     private void ScrollToBottom()
     {
-        var scroll = this.FindControl<ScrollViewer>("MessageScrollViewer");
-        if (scroll is null) return;
+        ScrollViewer? scroll = this.FindControl<ScrollViewer>("MessageScrollViewer");
+        if (scroll is null)
+        {
+            return;
+        }
 
         _wasAtBottom = true;
         Dispatcher.UIThread.Post(scroll.ScrollToEnd, DispatcherPriority.Background);

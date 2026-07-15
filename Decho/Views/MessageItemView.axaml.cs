@@ -1,10 +1,8 @@
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
+
 using Decho.ViewModels;
 
 namespace Decho.Views;
@@ -30,9 +28,13 @@ public partial class MessageItemView : UserControl
 
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
-        if (!_pendingLoad) return;
+        if (!_pendingLoad)
+        {
+            return;
+        }
+
         _pendingLoad = false;
-        var msg = (MessageViewModel)DataContext!;
+        MessageViewModel msg = (MessageViewModel)DataContext!;
         _ = LoadImageAsync(msg, _loadCts!.Token);
     }
 
@@ -40,21 +42,26 @@ public partial class MessageItemView : UserControl
     {
         try
         {
-            var topLevel = TopLevel.GetTopLevel(this);
-            if (topLevel?.DataContext is not MainWindowViewModel mainVm) return;
+            TopLevel? topLevel = TopLevel.GetTopLevel(this);
+            if (topLevel?.DataContext is not MainWindowViewModel mainVm)
+            {
+                return;
+            }
 
-            var bytes = await mainVm.ConnectionService.DownloadImageBytesAsync(
+            byte[]? bytes = await mainVm.ConnectionService.DownloadImageBytesAsync(
                 msg.ServerUrl ?? "", msg.AttachmentUrl!);
 
             ct.ThrowIfCancellationRequested();
-            if (bytes is null || bytes.Length == 0) return;
+            if (bytes is null || bytes.Length == 0)
+            {
+                return;
+            }
 
-            using var stream = new MemoryStream(bytes);
-            var bitmap = new Bitmap(stream);
+            using MemoryStream stream = new MemoryStream(bytes);
+            Bitmap bitmap = new Bitmap(stream);
             ct.ThrowIfCancellationRequested();
-            var image = this.FindControl<Image>("MessageImage");
-            if (image is not null)
-                image.Source = bitmap;
+            Image? image = this.FindControl<Image>("MessageImage");
+            _ = image?.Source = bitmap;
         }
         catch
         {
@@ -64,21 +71,35 @@ public partial class MessageItemView : UserControl
 
     private async void OnDownloadClicked(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is not MessageViewModel msg) return;
-        if (msg.AttachmentUrl is null) return;
+        if (DataContext is not MessageViewModel msg)
+        {
+            return;
+        }
 
-        var topLevel = TopLevel.GetTopLevel(this);
-        if (topLevel?.StorageProvider is null) return;
+        if (msg.AttachmentUrl is null)
+        {
+            return;
+        }
 
-        var mainVm = topLevel.DataContext as MainWindowViewModel;
-        if (mainVm is null) return;
+        TopLevel? topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel?.StorageProvider is null)
+        {
+            return;
+        }
 
-        var tempPath = await mainVm.ConnectionService.DownloadAttachmentAsync(
-            msg.ServerUrl ?? "", msg.AttachmentUrl, msg.AttachmentFileName ?? "download");
+        if (topLevel.DataContext is not MainWindowViewModel mainVm)
+        {
+            return;
+        }
 
-        if (tempPath is null) return;
+        string? tempPath = await mainVm.ConnectionService.DownloadAttachmentAsync(msg.ServerUrl ?? "", msg.AttachmentUrl, msg.AttachmentFileName ?? "download");
 
-        var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        if (tempPath is null)
+        {
+            return;
+        }
+
+        IStorageFile? file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             SuggestedFileName = msg.AttachmentFileName ?? "download",
         });
@@ -88,7 +109,13 @@ public partial class MessageItemView : UserControl
             File.Copy(tempPath, savePath, overwrite: true);
         }
 
-        try { File.Delete(tempPath); }
-        catch { }
+        try
+        {
+            File.Delete(tempPath);
+        }
+        catch
+        {
+            // Ignore if temp file cannot be deleted
+        }
     }
 }

@@ -1,50 +1,48 @@
-using System;
-using System.Reactive;
-using System.Reactive.Linq;
-using System.Threading.Tasks;
-
 using EchoHub.Client.Commands;
-using ReactiveUI;
+
+using System.Reactive;
 
 namespace Decho.ViewModels;
 
 public sealed class MessageComposerViewModel : ViewModelBase
 {
-    private string _draft = string.Empty;
-    private CommandHandler? _commandHandler;
-    private string _serverUrl = string.Empty;
+    public event Action<string, string>? SendRequested;
 
-    public MessageComposerViewModel()
-    {
-        var canSend = this.WhenAnyValue(x => x.Draft, draft => !string.IsNullOrWhiteSpace(draft));
-        SendCommand = ReactiveCommand.Create(Send, canSend);
-    }
+    public event Func<string, Task<string?>>? CommandRequested;
+
+    public event Action<string, string>? FileUploadRequested;
+
+    private CommandHandler? _commandHandler;
 
     public string Draft
     {
-        get => _draft;
-        set => this.RaiseAndSetIfChanged(ref _draft, value);
-    }
+        get;
+        set => this.RaiseAndSetIfChanged(ref field, value);
+    } = string.Empty;
 
-    public string ServerUrl => _serverUrl;
+    public string ServerUrl { get; private set; } = string.Empty;
 
     public ReactiveCommand<Unit, Unit> SendCommand { get; }
 
     public bool HasCommandHandler => _commandHandler is not null;
 
-    public event Action<string, string>? SendRequested;
-    public event Func<string, Task<string?>>? CommandRequested;
-    public event Action<string, string>? FileUploadRequested;
+    public MessageComposerViewModel()
+    {
+        IObservable<bool> canSend = this.WhenAnyValue(x => x.Draft, draft => !string.IsNullOrWhiteSpace(draft));
+        SendCommand = ReactiveCommand.Create(Send, canSend);
+    }
 
     public void RequestFileUpload(string filePath)
     {
-        if (!string.IsNullOrEmpty(_serverUrl))
-            FileUploadRequested?.Invoke(_serverUrl, filePath);
+        if (!string.IsNullOrEmpty(ServerUrl))
+        {
+            FileUploadRequested?.Invoke(ServerUrl, filePath);
+        }
     }
 
     public void SetServer(string serverUrl)
     {
-        _serverUrl = serverUrl;
+        ServerUrl = serverUrl;
     }
 
     public void SetCommandHandler(CommandHandler handler)
@@ -53,23 +51,28 @@ public sealed class MessageComposerViewModel : ViewModelBase
         this.RaisePropertyChanged(nameof(HasCommandHandler));
     }
 
-    public bool IsCommand(string input) => _commandHandler?.IsCommand(input) ?? input.StartsWith('/');
+    public bool IsCommand(string input)
+    {
+        return _commandHandler?.IsCommand(input) ?? input.StartsWith('/');
+    }
 
     private void Send()
     {
-        var text = Draft.Trim();
+        string text = Draft.Trim();
         if (string.IsNullOrWhiteSpace(text))
+        {
             return;
+        }
 
         Draft = string.Empty;
 
         if (_commandHandler is not null && _commandHandler.IsCommand(text))
         {
-            CommandRequested?.Invoke(text);
+            _ = (CommandRequested?.Invoke(text));
         }
         else
         {
-            SendRequested?.Invoke(_serverUrl, text);
+            SendRequested?.Invoke(ServerUrl, text);
         }
     }
 }

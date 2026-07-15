@@ -2,37 +2,19 @@ using System.Collections.ObjectModel;
 
 namespace Decho.Models;
 
-public sealed class ServerModel
+public sealed class ServerModel(string id, string name, ObservableCollection<ChannelModel> channels, string serverUrl = "", bool isConnected = false, bool isConnecting = false, string? connectedUser = null)
 {
-    public ServerModel(
-        string id,
-        string name,
-        ObservableCollection<ChannelModel> channels,
-        string serverUrl = "",
-        bool isConnected = false,
-        bool isConnecting = false,
-        string? connectedUser = null)
-    {
-        Id = id;
-        Name = name;
-        Channels = channels;
-        ServerUrl = serverUrl;
-        IsConnected = isConnected;
-        IsConnecting = isConnecting;
-        ConnectedUser = connectedUser;
-    }
+    public string Id { get; } = id;
 
-    public string Id { get; }
+    public string Name { get; } = name;
 
-    public string Name { get; }
+    public string ServerUrl { get; set; } = serverUrl;
 
-    public string ServerUrl { get; set; }
+    public bool IsConnected { get; set; } = isConnected;
 
-    public bool IsConnected { get; set; }
+    public bool IsConnecting { get; set; } = isConnecting;
 
-    public bool IsConnecting { get; set; }
+    public string? ConnectedUser { get; set; } = connectedUser;
 
-    public string? ConnectedUser { get; set; }
-
-    public ObservableCollection<ChannelModel> Channels { get; }
+    public ObservableCollection<ChannelModel> Channels { get; } = channels;
 }

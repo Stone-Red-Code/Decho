@@ -1,72 +1,60 @@
-using System;
-using System.Collections.ObjectModel;
-using System.Threading.Tasks;
-
 using EchoHub.Client.Commands;
-using ReactiveUI;
+
+using System.Collections.ObjectModel;
 
 namespace Decho.ViewModels;
 
 public sealed class ChatViewModel : ViewModelBase
 {
-    private ObservableCollection<MessageViewModel> _messages = new();
-    private string _channelTitle = "Select a channel";
-    private string? _channelTopic;
-    private bool _hasTopic;
-    private string _currentServerUrl = string.Empty;
-    private string _currentChannelName = string.Empty;
-
-    public ChatViewModel()
-    {
-        Composer = new MessageComposerViewModel();
-        Composer.CommandRequested += HandleCommandAsync;
-    }
-
     public ObservableCollection<MessageViewModel> Messages
     {
-        get => _messages;
-        private set => this.RaiseAndSetIfChanged(ref _messages, value);
-    }
+        get;
+        private set => this.RaiseAndSetIfChanged(ref field, value);
+    } = [];
 
     public string ChannelTitle
     {
-        get => _channelTitle;
-        private set => this.RaiseAndSetIfChanged(ref _channelTitle, value);
-    }
+        get;
+        private set => this.RaiseAndSetIfChanged(ref field, value);
+    } = "Select a channel";
 
     public string? ChannelTopic
     {
-        get => _channelTopic;
+        get;
         set
         {
-            this.RaiseAndSetIfChanged(ref _channelTopic, value);
+            _ = this.RaiseAndSetIfChanged(ref field, value);
             this.RaisePropertyChanged(nameof(HasTopic));
         }
     }
 
     public bool HasTopic
     {
-        get => _hasTopic;
-        private set => this.RaiseAndSetIfChanged(ref _hasTopic, value);
+        get;
+        private set => this.RaiseAndSetIfChanged(ref field, value);
     }
 
     public MessageComposerViewModel Composer { get; }
 
-    public string CurrentServerUrl => _currentServerUrl;
-    public string CurrentChannelName => _currentChannelName;
+    public string CurrentServerUrl { get; private set; } = string.Empty;
 
-    public event Func<string, Task<string?>>? CommandRequested;
+    public string CurrentChannelName { get; private set; } = string.Empty;
+
+    public ChatViewModel()
+    {
+        Composer = new MessageComposerViewModel();
+    }
 
     public void SetChannel(ChannelViewModel? channel, string serverUrl = "")
     {
         if (channel is null)
         {
-            Messages = new ObservableCollection<MessageViewModel>();
+            Messages = [];
             ChannelTitle = "Select a channel";
             ChannelTopic = null;
             HasTopic = false;
-            _currentChannelName = string.Empty;
-            _currentServerUrl = string.Empty;
+            CurrentChannelName = string.Empty;
+            CurrentServerUrl = string.Empty;
             Composer.SetServer(string.Empty);
             return;
         }
@@ -75,8 +63,8 @@ public sealed class ChatViewModel : ViewModelBase
         ChannelTitle = "#" + channel.Name;
         ChannelTopic = channel.Topic;
         HasTopic = channel.HasTopic;
-        _currentChannelName = channel.Name;
-        _currentServerUrl = serverUrl;
+        CurrentChannelName = channel.Name;
+        CurrentServerUrl = serverUrl;
         Composer.SetServer(serverUrl);
     }
 
@@ -85,25 +73,11 @@ public sealed class ChatViewModel : ViewModelBase
         Composer.SetCommandHandler(handler);
     }
 
-    public void AddMessage(MessageViewModel message)
-    {
-        Messages.Add(message);
-    }
-
     public void ClearMessages()
     {
-        Messages = new ObservableCollection<MessageViewModel>();
+        Messages = [];
         ChannelTitle = "Select a channel";
         ChannelTopic = null;
         HasTopic = false;
-    }
-
-    private async Task<string?> HandleCommandAsync(string commandText)
-    {
-        if (CommandRequested is not null)
-        {
-            return await CommandRequested(commandText);
-        }
-        return null;
     }
 }

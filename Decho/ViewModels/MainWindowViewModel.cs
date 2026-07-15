@@ -1,14 +1,4 @@
-using System;
-using System.Collections.ObjectModel;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reactive;
-using System.Reactive.Concurrency;
-using System.Reactive.Linq;
-using System.Threading.Tasks;
-
 using Avalonia.Controls;
-using Avalonia.Controls.ApplicationLifetimes;
 
 using Decho.Models;
 using Decho.Services;
@@ -19,16 +9,14 @@ using EchoHub.Core.Constants;
 using EchoHub.Core.DTOs;
 using EchoHub.Core.Models;
 
-using ReactiveUI;
+using System.Reactive;
+using System.Reactive.Linq;
 
 namespace Decho.ViewModels;
 
 public sealed class MainWindowViewModel : ViewModelBase
 {
-    private readonly ConnectionService _connectionService;
     private readonly CommandHandler _commandHandler;
-    private string _statusText = "Ready";
-    private bool _isConnected;
     private Window? _mainWindow;
 
     public string Title { get; } = "Decho";
@@ -39,24 +27,18 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     public string StatusText
     {
-        get => _statusText;
-        set => this.RaiseAndSetIfChanged(ref _statusText, value);
-    }
+        get;
+        set => this.RaiseAndSetIfChanged(ref field, value);
+    } = "Ready";
 
-    public bool IsConnected
-    {
-        get => _isConnected;
-        set => this.RaiseAndSetIfChanged(ref _isConnected, value);
-    }
-
-    public ConnectionService ConnectionService => _connectionService;
+    public ConnectionService ConnectionService { get; }
 
     public ReactiveCommand<Unit, Unit> AddServerCommand { get; }
 
     public MainWindowViewModel()
     {
-        _connectionService = new ConnectionService();
-        _commandHandler = _connectionService.CreateCommandHandler();
+        ConnectionService = new ConnectionService();
+        _commandHandler = new CommandHandler();
 
         Sidebar = new SidebarViewModel();
         Chat = new ChatViewModel();
@@ -70,8 +52,8 @@ public sealed class MainWindowViewModel : ViewModelBase
         WireCommandHandlerEvents();
         WireConnectionServiceEvents();
 
-        Sidebar.WhenAnyValue(x => x.SelectedChannel)
-            .Subscribe(channel => HandleChannelSelected(channel));
+        _ = Sidebar.WhenAnyValue(x => x.SelectedChannel)
+            .Subscribe(HandleChannelSelected);
 
         _ = InitializeSavedServersAsync();
     }
@@ -81,15 +63,20 @@ public sealed class MainWindowViewModel : ViewModelBase
         _mainWindow = window;
     }
 
+    public void Dispose()
+    {
+        ConnectionService.Dispose();
+    }
+
     private void AddServer()
     {
-        var placeholderServer = new ServerModel(
+        ServerModel placeholderServer = new ServerModel(
             Guid.NewGuid().ToString("N"),
             "New Server",
-            new ObservableCollection<ChannelModel>(),
+            [],
             isConnected: false);
 
-        var serverVm = new ServerViewModel(placeholderServer);
+        ServerViewModel serverVm = new ServerViewModel(placeholderServer);
         serverVm.ConnectRequested += async () => await HandleServerConnectRequested(serverVm);
         serverVm.DisconnectRequested += async () => await HandleServerDisconnectRequested(serverVm);
 
@@ -101,9 +88,13 @@ public sealed class MainWindowViewModel : ViewModelBase
     {
         _commandHandler.OnSetStatus += async (status, message) =>
         {
-            var serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl)) return;
-            await _connectionService.UpdateStatusAsync(serverUrl, status, message);
+            string serverUrl = GetCurrentServerUrl();
+            if (string.IsNullOrEmpty(serverUrl))
+            {
+                return;
+            }
+
+            await ConnectionService.UpdateStatusAsync(serverUrl, status, message);
         };
 
         _commandHandler.OnSetTheme += themeName =>
@@ -113,111 +104,156 @@ public sealed class MainWindowViewModel : ViewModelBase
 
         _commandHandler.OnJoinChannel += async channelName =>
         {
-            var serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl)) return;
+            string serverUrl = GetCurrentServerUrl();
+            if (string.IsNullOrEmpty(serverUrl))
+            {
+                return;
+            }
 
-            var channel = await _connectionService.JoinChannelAsync(serverUrl, channelName);
+            List<MessageModel> channel = await ConnectionService.JoinChannelAsync(serverUrl, channelName);
             EnsureChannelInList(serverUrl, channelName);
-            var channelModel = FindChannel(serverUrl, channelName);
+            ChannelModel? channelModel = FindChannel(serverUrl, channelName);
             if (channelModel is not null)
             {
-                var channelVm = Sidebar.GetServer(serverUrl)?.Channels
+                ChannelViewModel? channelVm = Sidebar.GetServer(serverUrl)?.Channels
                     .FirstOrDefault(c => c.Name == channelName);
                 if (channelVm is not null)
                 {
-                    foreach (var msg in channel)
+                    foreach (MessageModel msg in channel)
+                    {
                         channelVm.AddMessage(msg);
+                    }
                 }
             }
         };
 
         _commandHandler.OnLeaveChannel += async () =>
         {
-            var serverUrl = GetCurrentServerUrl();
-            var channel = Chat.CurrentChannelName;
-            if (string.IsNullOrEmpty(serverUrl) || string.IsNullOrEmpty(channel)) return;
+            string serverUrl = GetCurrentServerUrl();
+            string channel = Chat.CurrentChannelName;
+            if (string.IsNullOrEmpty(serverUrl) || string.IsNullOrEmpty(channel))
+            {
+                return;
+            }
 
-            if (channel == HubConstants.DefaultChannel) return;
-            await _connectionService.LeaveChannelAsync(serverUrl, channel);
+            if (channel == HubConstants.DefaultChannel)
+            {
+                return;
+            }
+
+            await ConnectionService.LeaveChannelAsync(serverUrl, channel);
         };
 
         _commandHandler.OnListUsers += async () =>
         {
-            var serverUrl = GetCurrentServerUrl();
-            var channel = Chat.CurrentChannelName;
-            if (string.IsNullOrEmpty(serverUrl) || string.IsNullOrEmpty(channel)) return;
+            string serverUrl = GetCurrentServerUrl();
+            string channel = Chat.CurrentChannelName;
+            if (string.IsNullOrEmpty(serverUrl) || string.IsNullOrEmpty(channel))
+            {
+                return;
+            }
 
-            var users = await _connectionService.GetOnlineUsersAsync(serverUrl, channel);
-            var userList = string.Join(", ", users.Select(u => u.DisplayName ?? u.Username));
+            List<UserPresenceDto> users = await ConnectionService.GetOnlineUsersAsync(serverUrl, channel);
+            string userList = string.Join(", ", users.Select(u => u.DisplayName ?? u.Username));
             StatusText = $"Online in #{channel}: {userList}";
         };
 
         _commandHandler.OnSetTopic += async topic =>
         {
-            var serverUrl = GetCurrentServerUrl();
-            var channel = Chat.CurrentChannelName;
-            if (string.IsNullOrEmpty(serverUrl) || string.IsNullOrEmpty(channel)) return;
+            string serverUrl = GetCurrentServerUrl();
+            string channel = Chat.CurrentChannelName;
+            if (string.IsNullOrEmpty(serverUrl) || string.IsNullOrEmpty(channel))
+            {
+                return;
+            }
 
-            await _connectionService.UpdateProfileAsync(serverUrl, null, null, null);
-            _connectionService.UpdateChannelTopic(serverUrl, channel, topic);
+            await ConnectionService.UpdateProfileAsync(serverUrl, null, null, null);
+            ConnectionService.UpdateChannelTopic(serverUrl, channel, topic);
             Chat.ChannelTopic = topic;
         };
 
         _commandHandler.OnKickUser += async (username, reason) =>
         {
-            var serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl)) return;
-            await _connectionService.KickUserAsync(serverUrl, username, reason);
+            string serverUrl = GetCurrentServerUrl();
+            if (string.IsNullOrEmpty(serverUrl))
+            {
+                return;
+            }
+
+            await ConnectionService.KickUserAsync(serverUrl, username, reason);
         };
 
         _commandHandler.OnBanUser += async (username, reason) =>
         {
-            var serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl)) return;
-            await _connectionService.BanUserAsync(serverUrl, username, reason);
+            string serverUrl = GetCurrentServerUrl();
+            if (string.IsNullOrEmpty(serverUrl))
+            {
+                return;
+            }
+
+            await ConnectionService.BanUserAsync(serverUrl, username, reason);
         };
 
         _commandHandler.OnUnbanUser += async username =>
         {
-            var serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl)) return;
-            await _connectionService.UnbanUserAsync(serverUrl, username);
+            string serverUrl = GetCurrentServerUrl();
+            if (string.IsNullOrEmpty(serverUrl))
+            {
+                return;
+            }
+
+            await ConnectionService.UnbanUserAsync(serverUrl, username);
         };
 
         _commandHandler.OnMuteUser += async (username, duration) =>
         {
-            var serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl)) return;
-            await _connectionService.MuteUserAsync(serverUrl, username, duration);
+            string serverUrl = GetCurrentServerUrl();
+            if (string.IsNullOrEmpty(serverUrl))
+            {
+                return;
+            }
+
+            await ConnectionService.MuteUserAsync(serverUrl, username, duration);
         };
 
         _commandHandler.OnUnmuteUser += async username =>
         {
-            var serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl)) return;
-            await _connectionService.UnmuteUserAsync(serverUrl, username);
+            string serverUrl = GetCurrentServerUrl();
+            if (string.IsNullOrEmpty(serverUrl))
+            {
+                return;
+            }
+
+            await ConnectionService.UnmuteUserAsync(serverUrl, username);
         };
 
         _commandHandler.OnAssignRole += async (username, roleStr) =>
         {
-            var serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl)) return;
+            string serverUrl = GetCurrentServerUrl();
+            if (string.IsNullOrEmpty(serverUrl))
+            {
+                return;
+            }
 
-            var role = roleStr.ToLowerInvariant() switch
+            ServerRole role = roleStr.ToLowerInvariant() switch
             {
                 "admin" => ServerRole.Admin,
                 "mod" => ServerRole.Mod,
                 _ => ServerRole.Member,
             };
-            await _connectionService.AssignRoleAsync(serverUrl, username, role);
+            await ConnectionService.AssignRoleAsync(serverUrl, username, role);
         };
 
         _commandHandler.OnNukeChannel += async () =>
         {
-            var serverUrl = GetCurrentServerUrl();
-            var channel = Chat.CurrentChannelName;
-            if (string.IsNullOrEmpty(serverUrl) || string.IsNullOrEmpty(channel)) return;
-            await _connectionService.NukeChannelAsync(serverUrl, channel);
+            string serverUrl = GetCurrentServerUrl();
+            string channel = Chat.CurrentChannelName;
+            if (string.IsNullOrEmpty(serverUrl) || string.IsNullOrEmpty(channel))
+            {
+                return;
+            }
+
+            await ConnectionService.NukeChannelAsync(serverUrl, channel);
         };
 
         _commandHandler.OnTestSound += () => Task.CompletedTask;
@@ -225,7 +261,10 @@ public sealed class MainWindowViewModel : ViewModelBase
         _commandHandler.OnQuit += () =>
         {
             if (_mainWindow is not null)
+            {
                 Avalonia.Threading.Dispatcher.UIThread.Post(() => _mainWindow.Close());
+            }
+
             return Task.CompletedTask;
         };
 
@@ -233,20 +272,23 @@ public sealed class MainWindowViewModel : ViewModelBase
 
         _commandHandler.OnSendFile += async (target, size) =>
         {
-            var serverUrl = GetCurrentServerUrl();
-            var channel = Chat.CurrentChannelName;
-            if (string.IsNullOrEmpty(serverUrl) || string.IsNullOrEmpty(channel)) return;
+            string serverUrl = GetCurrentServerUrl();
+            string channel = Chat.CurrentChannelName;
+            if (string.IsNullOrEmpty(serverUrl) || string.IsNullOrEmpty(channel))
+            {
+                return;
+            }
 
             try
             {
-                if (Uri.TryCreate(target, UriKind.Absolute, out var uri)
+                if (Uri.TryCreate(target, UriKind.Absolute, out Uri? uri)
                     && (uri.Scheme == "http" || uri.Scheme == "https"))
                 {
-                    await _connectionService.SendUrlAsync(serverUrl, channel, target, size);
+                    await ConnectionService.SendUrlAsync(serverUrl, channel, target, size);
                 }
                 else
                 {
-                    await _connectionService.UploadFileAsync(serverUrl, channel, target, size);
+                    await ConnectionService.UploadFileAsync(serverUrl, channel, target, size);
                 }
             }
             catch (Exception ex)
@@ -257,23 +299,35 @@ public sealed class MainWindowViewModel : ViewModelBase
 
         _commandHandler.OnSetNick += async displayName =>
         {
-            var serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl)) return;
-            await _connectionService.UpdateProfileAsync(serverUrl, displayName, null, null);
+            string serverUrl = GetCurrentServerUrl();
+            if (string.IsNullOrEmpty(serverUrl))
+            {
+                return;
+            }
+
+            await ConnectionService.UpdateProfileAsync(serverUrl, displayName, null, null);
         };
 
         _commandHandler.OnSetColor += async color =>
         {
-            var serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl)) return;
-            await _connectionService.UpdateProfileAsync(serverUrl, null, null, color);
+            string serverUrl = GetCurrentServerUrl();
+            if (string.IsNullOrEmpty(serverUrl))
+            {
+                return;
+            }
+
+            await ConnectionService.UpdateProfileAsync(serverUrl, null, null, color);
         };
 
         _commandHandler.OnSetAvatar += async target =>
         {
-            var serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl)) return;
-            await _connectionService.SetAvatarAsync(serverUrl, target);
+            string serverUrl = GetCurrentServerUrl();
+            if (string.IsNullOrEmpty(serverUrl))
+            {
+                return;
+            }
+
+            await ConnectionService.SetAvatarAsync(serverUrl, target);
         };
 
         _commandHandler.OnOpenProfile += async username =>
@@ -283,8 +337,8 @@ public sealed class MainWindowViewModel : ViewModelBase
 
         _commandHandler.OnOpenServers += () =>
         {
-            var config = _connectionService.LoadConfig();
-            var servers = string.Join("\n", config.SavedServers.Select(s =>
+            ClientConfig config = ConfigManager.Load();
+            string servers = string.Join("\n", config.SavedServers.Select(s =>
                 $"{s.Name} ({s.Url}) - {s.Username ?? "?"}"));
             StatusText = servers;
             return Task.CompletedTask;
@@ -293,75 +347,67 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     private void WireConnectionServiceEvents()
     {
-        _connectionService.ServerAdded += server =>
+        ConnectionService.ServerAdded += server =>
         {
-            var serverVm = new ServerViewModel(server);
+            ServerViewModel serverVm = new ServerViewModel(server);
             serverVm.ConnectRequested += () => HandleServerConnectRequested(serverVm);
             serverVm.DisconnectRequested += () => HandleServerDisconnectRequested(serverVm);
-            serverVm.WhenAnyValue(s => s.SelectedChannel)
+            _ = serverVm.WhenAnyValue(s => s.SelectedChannel)
                 .Where(channel => channel is not null)
                 .Subscribe(channel => Sidebar.SelectedChannel = channel!);
 
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                var existing = Sidebar.GetServer(server.ServerUrl);
+                ServerViewModel? existing = Sidebar.GetServer(server.ServerUrl);
                 if (existing is not null)
-                    Sidebar.Servers.Remove(existing);
+                {
+                    _ = Sidebar.Servers.Remove(existing);
+                }
+
                 Sidebar.Servers.Add(serverVm);
                 StatusText = $"Connected to {server.Name}";
-                IsConnected = true;
             });
         };
 
-        _connectionService.ServerRemoved += serverUrl =>
+        ConnectionService.ServerRemoved += serverUrl =>
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
                 Sidebar.RemoveServer(serverUrl);
                 if (Sidebar.Servers.Count == 0)
                 {
-                    IsConnected = false;
                     Chat.ClearMessages();
                     StatusText = "Ready";
                 }
             });
         };
 
-        _connectionService.ServerStateChanged += server =>
+        ConnectionService.ServerStateChanged += server =>
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                var serverVm = Sidebar.GetServer(server.ServerUrl);
+                ServerViewModel? serverVm = Sidebar.GetServer(server.ServerUrl);
                 if (serverVm is not null)
                 {
                     serverVm.SyncFromModel();
                     if (!server.IsConnected)
+                    {
                         StatusText = $"Disconnected from {server.Name}";
+                    }
                 }
             });
         };
 
-        _connectionService.MessageReceived += (serverUrl, message) =>
+        ConnectionService.MessageReceived += (serverUrl, message) =>
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                var channelVm = FindChannelViewModel(serverUrl, message.ChannelName);
-                if (channelVm is not null)
-                {
-                    channelVm.AddMessage(message);
-                }
+                ChannelViewModel? channelVm = FindChannelViewModel(serverUrl, message.ChannelName);
+                channelVm?.AddMessage(message);
             });
         };
 
-        _connectionService.ChannelAdded += (serverUrl, channel) =>
-        {
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            {
-                EnsureChannelInList(serverUrl, channel.Name);
-            });
-        };
-
-        _connectionService.ErrorOccurred += (serverUrl, error) =>
+        ConnectionService.ErrorOccurred += (serverUrl, error) =>
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
@@ -372,10 +418,10 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     private async Task<string?> HandleCommandAsync(string commandText)
     {
-        var result = await _commandHandler.HandleAsync(commandText);
+        CommandResult result = await _commandHandler.HandleAsync(commandText);
         if (result.Message is not null && !result.IsError)
         {
-            Chat.AddMessage(new MessageViewModel(new MessageModel(
+            Chat.Messages.Add(new MessageViewModel(new MessageModel(
                 Guid.NewGuid().ToString("N"),
                 new UserModel("system", "System"),
                 DateTimeOffset.Now,
@@ -389,19 +435,21 @@ public sealed class MainWindowViewModel : ViewModelBase
     private void HandleSendRequested(string serverUrl, string text)
     {
         if (string.IsNullOrEmpty(Chat.CurrentChannelName))
+        {
             return;
+        }
 
-            if (_commandHandler.IsCommand(text))
-            {
-                _ = HandleCommandAsync(text);
-                return;
-            }
+        if (_commandHandler.IsCommand(text))
+        {
+            _ = HandleCommandAsync(text);
+            return;
+        }
 
-        Task.Run(async () =>
+        _ = Task.Run(async () =>
         {
             try
             {
-                await _connectionService.SendMessageAsync(serverUrl, Chat.CurrentChannelName, text);
+                await ConnectionService.SendMessageAsync(serverUrl, Chat.CurrentChannelName, text);
             }
             catch (Exception ex)
             {
@@ -415,13 +463,16 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     private void HandleFileUploadRequested(string serverUrl, string filePath)
     {
-        if (string.IsNullOrEmpty(Chat.CurrentChannelName)) return;
+        if (string.IsNullOrEmpty(Chat.CurrentChannelName))
+        {
+            return;
+        }
 
-        Task.Run(async () =>
+        _ = Task.Run(async () =>
         {
             try
             {
-                await _connectionService.UploadFileAsync(serverUrl, Chat.CurrentChannelName, filePath, null);
+                await ConnectionService.UploadFileAsync(serverUrl, Chat.CurrentChannelName, filePath, null);
                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                     StatusText = "File uploaded");
             }
@@ -441,24 +492,25 @@ public sealed class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        var serverUrl = FindServerUrlForChannel(channel);
+        string serverUrl = FindServerUrlForChannel(channel);
         Chat.SetChannel(channel, serverUrl);
 
         if (!string.IsNullOrEmpty(serverUrl))
         {
-            var commandHandler = _connectionService.CreateCommandHandler();
-            Chat.SetComposerCommandHandler(commandHandler);
+            Chat.SetComposerCommandHandler(new CommandHandler());
 
-            Task.Run(async () =>
+            _ = Task.Run(async () =>
             {
                 try
                 {
-                    var history = await _connectionService.JoinChannelAsync(serverUrl, channel.Name);
+                    List<MessageModel> history = await ConnectionService.JoinChannelAsync(serverUrl, channel.Name);
                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                     {
                         channel.ClearMessages();
-                        foreach (var msg in history)
+                        foreach (MessageModel msg in history)
+                        {
                             channel.AddMessage(msg);
+                        }
                     });
                 }
                 catch
@@ -471,19 +523,19 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     private async Task InitializeSavedServersAsync()
     {
-        var config = _connectionService.LoadConfig();
-        var connectTasks = new List<Task>();
+        ClientConfig config = ConfigManager.Load();
+        List<Task> connectTasks = [];
 
-        foreach (var saved in config.SavedServers)
+        foreach (SavedServer saved in config.SavedServers)
         {
-            var placeholderServer = new ServerModel(
+            ServerModel placeholderServer = new ServerModel(
                 Guid.NewGuid().ToString("N"),
                 saved.Name,
-                new ObservableCollection<ChannelModel>(),
+                [],
                 saved.Url,
                 isConnected: false);
 
-            var serverVm = new ServerViewModel(placeholderServer);
+            ServerViewModel serverVm = new ServerViewModel(placeholderServer);
             serverVm.ConnectRequested += async () => await HandleServerConnectRequested(serverVm);
             serverVm.DisconnectRequested += async () => await HandleServerDisconnectRequested(serverVm);
 
@@ -504,12 +556,14 @@ public sealed class MainWindowViewModel : ViewModelBase
     private async Task AutoConnectSavedServer(ServerViewModel serverVm, SavedServer saved)
     {
         if (string.IsNullOrEmpty(saved.Username) || string.IsNullOrEmpty(saved.RefreshToken))
+        {
             return;
+        }
 
         try
         {
             serverVm.IsConnecting = true;
-            await _connectionService.ConnectWithSavedTokenAsync(
+            await ConnectionService.ConnectWithSavedTokenAsync(
                 saved.Url, saved.Username, saved.RefreshToken, saved.RememberMe);
         }
         catch
@@ -518,43 +572,24 @@ public sealed class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private static async Task ShowMessageBox(Window owner, string title, string message)
-    {
-        var msgBox = new Window
-        {
-            Title = title,
-            Width = 400,
-            Height = 180,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            CanResize = false,
-        };
-
-        var stack = new StackPanel { Spacing = 10, Margin = new Avalonia.Thickness(15) };
-        stack.Children.Add(new TextBlock { Text = message, TextWrapping = Avalonia.Media.TextWrapping.Wrap });
-        var okBtn = new Button { Content = "OK", HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center };
-        stack.Children.Add(okBtn);
-        msgBox.Content = stack;
-
-        var tcs = new TaskCompletionSource();
-        okBtn.Click += (_, _) => { msgBox.Close(); tcs.TrySetResult(); };
-        msgBox.Closed += (_, _) => tcs.TrySetResult();
-
-        await msgBox.ShowDialog(owner);
-        await tcs.Task;
-    }
-
     private async Task HandleServerConnectRequested(ServerViewModel serverVm)
     {
         // Show connect dialog
-        if (_mainWindow is null) return;
+        if (_mainWindow is null)
+        {
+            return;
+        }
 
-        var config = _connectionService.LoadConfig();
-        var prefill = config.SavedServers.FirstOrDefault(s =>
+        ClientConfig config = ConfigManager.Load();
+        SavedServer? prefill = config.SavedServers.FirstOrDefault(s =>
             string.Equals(s.Url, serverVm.ServerUrl, StringComparison.OrdinalIgnoreCase));
-        var dialog = new ConnectDialog(config.SavedServers, prefill);
+        ConnectDialog dialog = new ConnectDialog(config.SavedServers, prefill);
 
-        var result = await dialog.ShowAsync(_mainWindow);
-        if (result is null) return;
+        ConnectDialogResult? result = await dialog.ShowAsync(_mainWindow);
+        if (result is null)
+        {
+            return;
+        }
 
         try
         {
@@ -563,12 +598,12 @@ public sealed class MainWindowViewModel : ViewModelBase
 
             if (result.IsSavedSession && result.SavedRefreshToken is not null)
             {
-                await _connectionService.ConnectWithSavedTokenAsync(
+                await ConnectionService.ConnectWithSavedTokenAsync(
                     result.ServerUrl, result.Username, result.SavedRefreshToken, result.RememberMe);
             }
             else
             {
-                await _connectionService.ConnectAsync(
+                _ = await ConnectionService.ConnectAsync(
                     result.ServerUrl, result.Username, result.Password, result.IsRegister, result.RememberMe);
             }
 
@@ -576,8 +611,8 @@ public sealed class MainWindowViewModel : ViewModelBase
             Sidebar.RemoveServer(serverVm.ServerUrl);
 
             // Save to config with refresh token
-            var refreshToken = _connectionService.GetRefreshToken(result.ServerUrl);
-            var savedServer = new SavedServer
+            string? refreshToken = ConnectionService.GetRefreshToken(result.ServerUrl);
+            SavedServer savedServer = new SavedServer
             {
                 Name = new Uri(result.ServerUrl).Host,
                 Url = result.ServerUrl,
@@ -586,7 +621,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 RememberMe = result.RememberMe,
                 LastConnected = DateTimeOffset.Now,
             };
-            _connectionService.SaveServerToConfig(savedServer);
+            ConfigManager.SaveServer(savedServer);
         }
         catch (Exception ex)
         {
@@ -599,7 +634,7 @@ public sealed class MainWindowViewModel : ViewModelBase
     {
         try
         {
-            await _connectionService.DisconnectAsync(serverVm.ServerUrl);
+            await ConnectionService.DisconnectAsync(serverVm.ServerUrl);
         }
         catch (Exception ex)
         {
@@ -609,38 +644,43 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     private void EnsureChannelInList(string serverUrl, string channelName)
     {
-        var serverVm = Sidebar.GetServer(serverUrl);
-        if (serverVm is null) return;
+        ServerViewModel? serverVm = Sidebar.GetServer(serverUrl);
+        if (serverVm is null)
+        {
+            return;
+        }
 
         if (!serverVm.Channels.Any(c => c.Name == channelName))
         {
-            var channelModel = new ChannelModel(
+            ChannelModel channelModel = new ChannelModel(
                 Guid.NewGuid().ToString("N"),
                 channelName,
-                new System.Collections.ObjectModel.ObservableCollection<MessageModel>());
-            var channelVm = new ChannelViewModel(channelModel);
+                []);
+            ChannelViewModel channelVm = new ChannelViewModel(channelModel);
             serverVm.Channels.Add(channelVm);
         }
     }
 
     private ChannelModel? FindChannel(string serverUrl, string channelName)
     {
-        var serverVm = Sidebar.GetServer(serverUrl);
+        ServerViewModel? serverVm = Sidebar.GetServer(serverUrl);
         return serverVm?.Channels.FirstOrDefault(c => c.Name == channelName)?.Model;
     }
 
     private ChannelViewModel? FindChannelViewModel(string serverUrl, string channelName)
     {
-        var serverVm = Sidebar.GetServer(serverUrl);
+        ServerViewModel? serverVm = Sidebar.GetServer(serverUrl);
         return serverVm?.Channels.FirstOrDefault(c => c.Name == channelName);
     }
 
     private string FindServerUrlForChannel(ChannelViewModel channel)
     {
-        foreach (var server in Sidebar.Servers)
+        foreach (ServerViewModel server in Sidebar.Servers)
         {
             if (server.Channels.Contains(channel))
+            {
                 return server.ServerUrl;
+            }
         }
         return string.Empty;
     }
@@ -648,11 +688,6 @@ public sealed class MainWindowViewModel : ViewModelBase
     private string GetCurrentServerUrl()
     {
         return Chat.CurrentServerUrl;
-    }
-
-    public void Dispose()
-    {
-        _connectionService.Dispose();
     }
 }
 
@@ -667,20 +702,14 @@ public sealed class ConnectDialogResult
     public string? SavedRefreshToken { get; set; }
 }
 
-public sealed class ConnectDialog
+public sealed class ConnectDialog(List<SavedServer> savedServers, SavedServer? prefill = null)
 {
-    private readonly List<SavedServer> _savedServers;
-    private readonly SavedServer? _prefill;
-
-    public ConnectDialog(List<SavedServer> savedServers, SavedServer? prefill = null)
-    {
-        _savedServers = savedServers;
-        _prefill = prefill;
-    }
+    private readonly List<SavedServer> _savedServers = savedServers;
+    private readonly SavedServer? _prefill = prefill;
 
     public async Task<ConnectDialogResult?> ShowAsync(Window owner)
     {
-        var dialog = new Window
+        Window dialog = new Window
         {
             Title = "Connect to Server",
             Width = 450,
@@ -689,31 +718,31 @@ public sealed class ConnectDialog
             CanResize = false,
         };
 
-        var stack = new StackPanel { Spacing = 8, Margin = new Avalonia.Thickness(15) };
+        StackPanel stack = new StackPanel { Spacing = 8, Margin = new Avalonia.Thickness(15) };
 
-        var urlLabel = new TextBlock { Text = "Server URL:" };
-        var urlBox = new TextBox { Watermark = "http://localhost:5000", Text = "http://localhost:5000" };
+        TextBlock urlLabel = new TextBlock { Text = "Server URL:" };
+        TextBox urlBox = new TextBox { Watermark = "http://localhost:5000", Text = "http://localhost:5000" };
         stack.Children.Add(urlLabel);
         stack.Children.Add(urlBox);
 
-        var userLabel = new TextBlock { Text = "Username:" };
-        var userBox = new TextBox { Watermark = "username" };
+        TextBlock userLabel = new TextBlock { Text = "Username:" };
+        TextBox userBox = new TextBox { Watermark = "username" };
         stack.Children.Add(userLabel);
         stack.Children.Add(userBox);
 
-        var passLabel = new TextBlock { Text = "Password:" };
-        var passBox = new TextBox { Watermark = "password", PasswordChar = '*' };
+        TextBlock passLabel = new TextBlock { Text = "Password:" };
+        TextBox passBox = new TextBox { Watermark = "password", PasswordChar = '*' };
         stack.Children.Add(passLabel);
         stack.Children.Add(passBox);
 
-        var rememberMe = new CheckBox { Content = "Remember me", IsChecked = true };
+        CheckBox rememberMe = new CheckBox { Content = "Remember me", IsChecked = true };
         stack.Children.Add(rememberMe);
 
-        var buttonPanel = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center, Spacing = 10 };
+        StackPanel buttonPanel = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center, Spacing = 10 };
 
-        var loginBtn = new Button { Content = "Login", Width = 100 };
-        var registerBtn = new Button { Content = "Register", Width = 100 };
-        var cancelBtn = new Button { Content = "Cancel", Width = 100 };
+        Button loginBtn = new Button { Content = "Login", Width = 100 };
+        Button registerBtn = new Button { Content = "Register", Width = 100 };
+        Button cancelBtn = new Button { Content = "Cancel", Width = 100 };
         buttonPanel.Children.Add(loginBtn);
         buttonPanel.Children.Add(registerBtn);
         buttonPanel.Children.Add(cancelBtn);
@@ -722,24 +751,29 @@ public sealed class ConnectDialog
         ListBox? serversList = null;
         if (_savedServers.Count > 0)
         {
-            var sep = new TextBlock { Text = "--- Saved Servers ---", HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center };
+            TextBlock sep = new TextBlock { Text = "--- Saved Servers ---", HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center };
             stack.Children.Add(sep);
 
-            serversList = new ListBox { Height = 100 };
-            serversList.ItemsSource = _savedServers.Select(s => $"{s.Name} ({s.Url}) - {s.Username ?? "?"}").ToList();
+            serversList = new ListBox
+            {
+                Height = 100,
+                ItemsSource = _savedServers.Select(s => $"{s.Name} ({s.Url}) - {s.Username ?? "?"}").ToList()
+            };
             stack.Children.Add(serversList);
 
             serversList.SelectionChanged += (_, _) =>
             {
-                var idx = serversList.SelectedIndex;
+                int idx = serversList.SelectedIndex;
                 if (idx >= 0 && idx < _savedServers.Count)
                 {
-                    var s = _savedServers[idx];
+                    SavedServer s = _savedServers[idx];
                     urlBox.Text = s.Url;
                     userBox.Text = s.Username ?? "";
                     rememberMe.IsChecked = s.RememberMe;
                     if (!string.IsNullOrEmpty(s.RefreshToken))
+                    {
                         passBox.Text = "";
+                    }
                 }
             };
         }
@@ -748,22 +782,24 @@ public sealed class ConnectDialog
         {
             urlBox.Text = _prefill.Url;
             userBox.Text = _prefill.Username ?? "";
-            var idx = _savedServers.FindIndex(s =>
+            int idx = _savedServers.FindIndex(s =>
                 string.Equals(s.Url, _prefill.Url, StringComparison.OrdinalIgnoreCase));
             if (idx >= 0 && idx < _savedServers.Count && serversList is not null)
+            {
                 serversList.SelectedIndex = idx;
+            }
         }
 
         dialog.Content = new ScrollViewer { Content = stack };
 
-        var tcs = new TaskCompletionSource<ConnectDialogResult?>();
+        TaskCompletionSource<ConnectDialogResult?> tcs = new TaskCompletionSource<ConnectDialogResult?>();
         ConnectDialogResult? result = null;
 
         loginBtn.Click += async (_, _) =>
         {
-            var url = urlBox.Text?.Trim() ?? "";
-            var user = userBox.Text?.Trim() ?? "";
-            var pass = passBox.Text ?? "";
+            string url = urlBox.Text?.Trim() ?? "";
+            string user = userBox.Text?.Trim() ?? "";
+            string pass = passBox.Text ?? "";
 
             if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(user))
             {
@@ -772,7 +808,7 @@ public sealed class ConnectDialog
             }
 
             // Check for saved session
-            var saved = _savedServers.FirstOrDefault(s =>
+            SavedServer? saved = _savedServers.FirstOrDefault(s =>
                 string.Equals(s.Url, url, StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(s.Username, user, StringComparison.OrdinalIgnoreCase) &&
                 !string.IsNullOrEmpty(s.RefreshToken));
@@ -807,14 +843,14 @@ public sealed class ConnectDialog
             }
 
             dialog.Close();
-            tcs.TrySetResult(result);
+            _ = tcs.TrySetResult(result);
         };
 
         registerBtn.Click += (_, _) =>
         {
-            var url = urlBox.Text?.Trim() ?? "";
-            var user = userBox.Text?.Trim() ?? "";
-            var pass = passBox.Text ?? "";
+            string url = urlBox.Text?.Trim() ?? "";
+            string user = userBox.Text?.Trim() ?? "";
+            string pass = passBox.Text ?? "";
 
             if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(user) || string.IsNullOrEmpty(pass))
             {
@@ -832,28 +868,32 @@ public sealed class ConnectDialog
             };
 
             dialog.Close();
-            tcs.TrySetResult(result);
+            _ = tcs.TrySetResult(result);
         };
 
         cancelBtn.Click += (_, _) =>
         {
             dialog.Close();
-            tcs.TrySetResult(null);
+            _ = tcs.TrySetResult(null);
         };
 
         dialog.Closed += (_, _) => tcs.TrySetResult(result);
 
         if (owner is not null)
+        {
             await dialog.ShowDialog(owner);
+        }
         else
+        {
             dialog.Show();
+        }
 
         return await tcs.Task;
     }
 
     private static async Task ShowMessageBox(Window owner, string title, string message)
     {
-        var msgBox = new Window
+        Window msgBox = new Window
         {
             Title = title,
             Width = 350,
@@ -862,14 +902,14 @@ public sealed class ConnectDialog
             CanResize = false,
         };
 
-        var stack = new StackPanel { Spacing = 10, Margin = new Avalonia.Thickness(15) };
+        StackPanel stack = new StackPanel { Spacing = 10, Margin = new Avalonia.Thickness(15) };
         stack.Children.Add(new TextBlock { Text = message, TextWrapping = Avalonia.Media.TextWrapping.Wrap });
-        var okBtn = new Button { Content = "OK", HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center };
+        Button okBtn = new Button { Content = "OK", HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center };
         stack.Children.Add(okBtn);
         msgBox.Content = stack;
 
-        var tcs = new TaskCompletionSource();
-        okBtn.Click += (_, _) => { msgBox.Close(); tcs.TrySetResult(); };
+        TaskCompletionSource tcs = new TaskCompletionSource();
+        okBtn.Click += (_, _) => { msgBox.Close(); _ = tcs.TrySetResult(); };
         msgBox.Closed += (_, _) => tcs.TrySetResult();
 
         await msgBox.ShowDialog(owner);

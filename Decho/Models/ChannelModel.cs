@@ -2,29 +2,15 @@ using System.Collections.ObjectModel;
 
 namespace Decho.Models;
 
-public sealed class ChannelModel
+public sealed class ChannelModel(string id, string name, ObservableCollection<MessageModel> messages, string? topic = null, bool isPublic = true)
 {
-    public ChannelModel(
-        string id,
-        string name,
-        ObservableCollection<MessageModel> messages,
-        string? topic = null,
-        bool isPublic = true)
-    {
-        Id = id;
-        Name = name;
-        Messages = messages;
-        Topic = topic;
-        IsPublic = isPublic;
-    }
+    public string Id { get; } = id;
 
-    public string Id { get; }
+    public string Name { get; } = name;
 
-    public string Name { get; }
+    public string? Topic { get; set; } = topic;
 
-    public string? Topic { get; set; }
+    public bool IsPublic { get; } = isPublic;
 
-    public bool IsPublic { get; }
-
-    public ObservableCollection<MessageModel> Messages { get; }
+    public ObservableCollection<MessageModel> Messages { get; } = messages;
 }

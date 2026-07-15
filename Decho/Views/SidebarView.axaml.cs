@@ -12,14 +12,14 @@ public partial class SidebarView : UserControl
             nameof(SelectedChannel),
             defaultBindingMode: Avalonia.Data.BindingMode.TwoWay);
 
-    public SidebarView()
-    {
-        InitializeComponent();
-    }
-
     public ChannelViewModel? SelectedChannel
     {
         get => GetValue(SelectedChannelProperty);
         set => SetValue(SelectedChannelProperty, value);
+    }
+
+    public SidebarView()
+    {
+        InitializeComponent();
     }
 }
