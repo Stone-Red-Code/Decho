@@ -4,7 +4,7 @@
              xmlns:views="using:Decho.Views"
              x:Class="Decho.Views.MessageListView"
              x:DataType="vm:ChatViewModel">
-    <ScrollViewer>
+    <ScrollViewer Name="MessageScrollViewer">
         <ItemsControl ItemsSource="{Binding Messages}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:MessageViewModel">

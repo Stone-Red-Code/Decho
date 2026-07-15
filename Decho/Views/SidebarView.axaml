@@ -1,30 +1,55 @@
 <UserControl xmlns="https://github.com/avaloniaui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:Decho.ViewModels"
-             xmlns:views="using:Decho.Views"
-             x:Class="Decho.Views.SidebarView"
-             x:DataType="vm:SidebarViewModel">
-    <Border Background="{DynamicResource UiTheme00}" Width="250" CornerRadius="0 6 0 0">
-        <ScrollViewer Padding="5">
-            <ItemsControl ItemsSource="{Binding Servers}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:ServerViewModel">
-                        <Expander Padding="0"
-                                  Margin="0 0 0 6"
-                                  HorizontalAlignment="Stretch"
-                                  IsExpanded="{Binding IsExpanded}">
-                            <Expander.Header>
-                                <TextBlock FontWeight="Bold"
-                                           TextTrimming="CharacterEllipsis"
-                                           MaxWidth="190"
-                                           Padding="0"
-                                           Text="{Binding Name}" />
-                            </Expander.Header>
-                            <views:ChannelListView />
-                        </Expander>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
-    </Border>
+			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+			 xmlns:vm="using:Decho.ViewModels"
+			 xmlns:views="using:Decho.Views"
+			 x:Class="Decho.Views.SidebarView"
+			 x:DataType="vm:SidebarViewModel">
+	<Border Background="{DynamicResource UiTheme00}" Width="250" CornerRadius="0 6 0 0">
+		<ScrollViewer Padding="5">
+			<ItemsControl ItemsSource="{Binding Servers}">
+				<ItemsControl.ItemTemplate>
+					<DataTemplate x:DataType="vm:ServerViewModel">
+						<Expander Padding="0"
+								  Margin="0 0 0 6"
+								  HorizontalAlignment="Stretch"
+								  IsExpanded="{Binding IsExpanded}">
+							<Expander.Header>
+								<StackPanel Spacing="5">
+									<StackPanel Orientation="Horizontal" Spacing="5">
+										<Ellipse Width="8" Height="8"
+												 Fill="{Binding ConnectionStatusColor}"
+												 VerticalAlignment="Center" />
+										<TextBlock FontWeight="Bold"
+												   TextTrimming="CharacterEllipsis"
+												   MaxWidth="160"
+												   Padding="0"
+												   Text="{Binding Name}" />
+									</StackPanel>
+									<TextBlock FontSize="10"
+											   Text="{Binding ConnectionStatusText}"
+											   Opacity="0.6"
+											   VerticalAlignment="Center" />
+								</StackPanel>
+							</Expander.Header>
+							<StackPanel>
+								<Button Content="Connect"
+										Command="{Binding ConnectCommand}"
+										IsVisible="{Binding ShowConnectionControls}"
+										Margin="0 0 0 4"
+										Padding="5 2"
+										HorizontalAlignment="Stretch" />
+								<Button Content="Disconnect"
+										Command="{Binding DisconnectCommand}"
+										IsVisible="{Binding IsConnected}"
+										Margin="0 0 0 4"
+										Padding="5 2"
+										HorizontalAlignment="Stretch" />
+								<views:ChannelListView />
+							</StackPanel>
+						</Expander>
+					</DataTemplate>
+				</ItemsControl.ItemTemplate>
+			</ItemsControl>
+		</ScrollViewer>
+	</Border>
 </UserControl>

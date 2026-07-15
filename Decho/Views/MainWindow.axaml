@@ -1,33 +1,48 @@
 <Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:Decho.ViewModels"
-        xmlns:views="using:Decho.Views"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
-        x:Class="Decho.Views.MainWindow"
-        x:DataType="vm:MainWindowViewModel"
-        Icon="/Assets/avalonia-logo.ico"
-        Title="Decho">
+		xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+		xmlns:vm="using:Decho.ViewModels"
+		xmlns:views="using:Decho.Views"
+		xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+		xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+		xmlns:i="https://github.com/projektanker/icons.avalonia"
+		mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+		x:Class="Decho.Views.MainWindow"
+		x:DataType="vm:MainWindowViewModel"
+		Icon="/Assets/avalonia-logo.ico"
+		Width="1100" Height="600"
+		Title="Decho">
 
-    <Design.DataContext>
-        <!-- This only sets the DataContext for the previewer in an IDE,
-        to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
-        <vm:MainWindowViewModel/>
-    </Design.DataContext>
+	<Design.DataContext>
+		<vm:MainWindowViewModel/>
+	</Design.DataContext>
 
-    <Grid RowDefinitions="Auto, *" ColumnDefinitions="Auto, *">
-        <TextBlock FontSize="20"
-                   FontWeight="Bold"
-                   Margin="0 5"
-                   HorizontalAlignment="Center"
-                   Text="{Binding Title}" />
-        <views:SidebarView Grid.Row="1"
-                           Grid.Column="0"
-                           DataContext="{Binding Sidebar}"
-                           SelectedChannel="{Binding SelectedChannel, Mode=TwoWay}" />
-        <views:ChatView Grid.RowSpan="2"
-                        Grid.Column="1"
-                        DataContext="{Binding Chat}" />
-    </Grid>
+	<Grid RowDefinitions="Auto, *" ColumnDefinitions="Auto, *">
+		<DockPanel HorizontalAlignment="Stretch">
+			<TextBlock FontSize="20"
+					   FontWeight="Bold"
+					   Margin="5"
+					   Text="{Binding Title}" />
+
+			<Button i:Attached.Icon="fa-cog"
+					DockPanel.Dock="Right"
+					Background="Transparent"
+					Foreground="{DynamicResource UiTheme08}"
+					HorizontalAlignment="Right" />
+
+		<Button i:Attached.Icon="fa-plus"
+				Command="{Binding AddServerCommand}"
+				DockPanel.Dock="Right"
+				Background="Transparent"
+				Foreground="{DynamicResource UiTheme08}"
+				HorizontalAlignment="Right"
+				ToolTip.Tip="Add Server" />
+		</DockPanel>
+		<views:SidebarView Grid.Row="1"
+						   Grid.Column="0"
+						   DataContext="{Binding Sidebar}"
+						   SelectedChannel="{Binding SelectedChannel, Mode=TwoWay}" />
+		<views:ChatView Grid.RowSpan="2"
+						Grid.Column="1"
+						DataContext="{Binding Chat}" />
+	</Grid>
 </Window>
