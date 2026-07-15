@@ -41,8 +41,12 @@
 											Click="OnSettingsClicked">
 										<Button.ContextMenu>
 											<ContextMenu>
+												<MenuItem Header="Connect"
+														  Command="{Binding ConnectCommand}"
+														  IsVisible="{Binding ShowConnectionControls}" />
 												<MenuItem Header="Disconnect"
-														  Command="{Binding DisconnectCommand}" />
+														  Command="{Binding DisconnectCommand}"
+														  IsVisible="{Binding IsConnected}" />
 												<MenuItem Header="Remove Server"
 														  Command="{Binding RemoveCommand}" />
 											</ContextMenu>
