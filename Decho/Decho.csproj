@@ -34,7 +34,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\EchoHub\src\EchoHub.Client\EchoHub.Client.csproj" />
+    <ProjectReference Include="..\EchoHub\src\EchoHub.Client\EchoHub.Client.csproj">
+      <AdditionalProperties>DirectoryBuildPropsPath=$(MSBuildProjectDirectory)\Decho.Build.props</AdditionalProperties>
+    </ProjectReference>
     <ProjectReference Include="..\EchoHub\src\EchoHub.Core\EchoHub.Core.csproj" />
   </ItemGroup>
 </Project>

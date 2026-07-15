@@ -1,0 +1,8 @@
+<Project>
+  <Import Project="..\EchoHub\src\Directory.Build.props" Condition="Exists('..\EchoHub\src\Directory.Build.props')" />
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>Decho</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>
