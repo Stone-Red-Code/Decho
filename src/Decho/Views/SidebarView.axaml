@@ -35,13 +35,13 @@
 								<Button Content="Connect"
 										Command="{Binding ConnectCommand}"
 										IsVisible="{Binding ShowConnectionControls}"
-										Margin="0 0 0 4"
+										Margin="4"
 										Padding="5 2"
 										HorizontalAlignment="Stretch" />
 								<Button Content="Disconnect"
 										Command="{Binding DisconnectCommand}"
 										IsVisible="{Binding IsConnected}"
-										Margin="0 0 0 4"
+										Margin="4"
 										Padding="5 2"
 										HorizontalAlignment="Stretch" />
 								<views:ChannelListView />
