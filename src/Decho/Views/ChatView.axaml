@@ -1,16 +1,33 @@
 <UserControl xmlns="https://github.com/avaloniaui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:Decho.ViewModels"
-             xmlns:views="using:Decho.Views"
-             x:Class="Decho.Views.ChatView"
-             x:DataType="vm:ChatViewModel">
-    <Grid RowDefinitions="Auto, *, Auto" Margin="10">
-        <TextBlock FontWeight="Bold"
-                   FontSize="16"
-                   Margin="0 0 0 8"
-                   Text="{Binding ChannelTitle}" />
-        <views:MessageListView Grid.Row="1" />
-        <views:MessageComposerView Grid.Row="2"
-                                   DataContext="{Binding Composer}" />
-    </Grid>
+			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+			 xmlns:vm="using:Decho.ViewModels"
+			 xmlns:views="using:Decho.Views"
+			 xmlns:i="https://github.com/projektanker/icons.avalonia"
+			 x:Class="Decho.Views.ChatView"
+			 x:DataType="vm:ChatViewModel">
+	<Grid RowDefinitions="Auto, Auto, *, Auto" Margin="10">
+		<Grid ColumnDefinitions="*, Auto">
+			<StackPanel Orientation="Horizontal">
+				<TextBlock FontWeight="Bold"
+						   FontSize="16"
+						   Margin="0 0 4 4"
+						   Text="{Binding ChannelTitle}" />
+				<TextBlock Text="{Binding ChannelTopic}"
+						   FontSize="12"
+						   VerticalAlignment="Center"
+						   Opacity="0.7" />
+			</StackPanel>
+			<Button i:Attached.Icon="fa-users"
+					Grid.Column="1"
+					Margin="-10"
+					Background="Transparent"
+					Foreground="{DynamicResource UiTheme08}"
+					Command="{Binding ToggleUsersPanelCommand}"
+					VerticalAlignment="Top"
+					HorizontalAlignment="Right" />
+		</Grid>
+		<views:MessageListView Grid.Row="2" />
+		<views:MessageComposerView Grid.Row="3"
+								   DataContext="{Binding Composer}" />
+	</Grid>
 </UserControl>

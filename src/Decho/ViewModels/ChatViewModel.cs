@@ -1,4 +1,7 @@
+using EchoHub.Core.DTOs;
+
 using System.Collections.ObjectModel;
+using System.Reactive;
 
 namespace Decho.ViewModels;
 
@@ -9,6 +12,8 @@ public sealed class ChatViewModel : ViewModelBase
         get;
         private set => this.RaiseAndSetIfChanged(ref field, value);
     } = [];
+
+    public ObservableCollection<UserViewModel> OnlineUsers { get; } = [];
 
     public string ChannelTitle
     {
@@ -32,6 +37,20 @@ public sealed class ChatViewModel : ViewModelBase
         private set => this.RaiseAndSetIfChanged(ref field, value);
     }
 
+    public bool ShowOnlineUsers
+    {
+        get => field;
+        set => this.RaiseAndSetIfChanged(ref field, value);
+    }
+
+    public ReactiveCommand<Unit, Unit> ToggleUsersPanelCommand { get; }
+
+    public string OnlineUserCount
+    {
+        get => field;
+        set => this.RaiseAndSetIfChanged(ref field, value);
+    } = string.Empty;
+
     public MessageComposerViewModel Composer { get; }
 
     public string CurrentServerUrl { get; private set; } = string.Empty;
@@ -41,6 +60,12 @@ public sealed class ChatViewModel : ViewModelBase
     public ChatViewModel()
     {
         Composer = new MessageComposerViewModel();
+        ToggleUsersPanelCommand = ReactiveCommand.Create(ToggleUsersPanel);
+    }
+
+    private void ToggleUsersPanel()
+    {
+        ShowOnlineUsers = !ShowOnlineUsers;
     }
 
     public void SetChannel(ChannelViewModel? channel, string serverUrl = "", bool isServerConnected = true)
@@ -53,6 +78,9 @@ public sealed class ChatViewModel : ViewModelBase
             HasTopic = false;
             CurrentChannelName = string.Empty;
             CurrentServerUrl = string.Empty;
+            ShowOnlineUsers = false;
+            OnlineUsers.Clear();
+            OnlineUserCount = string.Empty;
             Composer.SetServer(string.Empty, isServerConnected);
             return;
         }
@@ -64,6 +92,45 @@ public sealed class ChatViewModel : ViewModelBase
         CurrentChannelName = channel.Name;
         CurrentServerUrl = serverUrl;
         Composer.SetServer(serverUrl, isServerConnected);
+
+        if (!isServerConnected)
+        {
+            ShowOnlineUsers = false;
+            OnlineUsers.Clear();
+            OnlineUserCount = string.Empty;
+        }
+    }
+
+    public void SetOnlineUsers(List<UserPresenceDto> users)
+    {
+        OnlineUsers.Clear();
+        foreach (UserPresenceDto user in users)
+        {
+            OnlineUsers.Add(new UserViewModel(user));
+        }
+        OnlineUserCount = $"{users.Count}";
+        ShowOnlineUsers = true;
+    }
+
+    public void AddOnlineUser(UserPresenceDto user)
+    {
+        if (OnlineUsers.All(u => u.Username != user.Username))
+        {
+            OnlineUsers.Add(new UserViewModel(user));
+            OnlineUserCount = $"{OnlineUsers.Count}";
+        }
+        ShowOnlineUsers = OnlineUsers.Count > 0;
+    }
+
+    public void RemoveOnlineUser(string username)
+    {
+        UserViewModel? user = OnlineUsers.FirstOrDefault(u => u.Username == username);
+        if (user is not null)
+        {
+            _ = OnlineUsers.Remove(user);
+            OnlineUserCount = $"{OnlineUsers.Count}";
+        }
+        ShowOnlineUsers = OnlineUsers.Count > 0;
     }
 
     public void ClearMessages()
@@ -72,5 +139,7 @@ public sealed class ChatViewModel : ViewModelBase
         ChannelTitle = "Select a channel";
         ChannelTopic = null;
         HasTopic = false;
+        OnlineUsers.Clear();
+        OnlineUserCount = string.Empty;
     }
 }

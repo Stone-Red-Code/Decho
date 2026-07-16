@@ -584,6 +584,24 @@ public sealed class MainWindowViewModel : ViewModelBase
             }
         };
 
+        ConnectionService.UserJoined += (serverUrl, channelName, username) =>
+        {
+            if (string.Equals(channelName, Chat.CurrentChannelName, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(serverUrl, Chat.CurrentServerUrl, StringComparison.OrdinalIgnoreCase))
+            {
+                _ = RefreshOnlineUsersAsync(serverUrl, channelName);
+            }
+        };
+
+        ConnectionService.UserLeft += (serverUrl, channelName) =>
+        {
+            if (string.Equals(channelName, Chat.CurrentChannelName, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(serverUrl, Chat.CurrentServerUrl, StringComparison.OrdinalIgnoreCase))
+            {
+                _ = RefreshOnlineUsersAsync(serverUrl, channelName);
+            }
+        };
+
         ConnectionService.ErrorOccurred += (serverUrl, error) =>
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
@@ -591,6 +609,22 @@ public sealed class MainWindowViewModel : ViewModelBase
                 StatusText = $"Error: {error}";
             });
         };
+    }
+
+    private async Task RefreshOnlineUsersAsync(string serverUrl, string channelName)
+    {
+        try
+        {
+            List<UserPresenceDto> users = await ConnectionService.GetOnlineUsersAsync(serverUrl, channelName);
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                Chat.SetOnlineUsers(users);
+            });
+        }
+        catch
+        {
+            // silently ignore
+        }
     }
 
     private async Task<string?> HandleCommandAsync(string commandText)
@@ -663,11 +697,17 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     private async Task HandleCreateChannelRequested(ServerViewModel server)
     {
-        if (_mainWindow is null) return;
+        if (_mainWindow is null)
+        {
+            return;
+        }
 
         CreateChannelWindow dialog = new CreateChannelWindow();
         bool? result = await dialog.ShowDialog<bool?>(_mainWindow);
-        if (result != true) return;
+        if (result != true)
+        {
+            return;
+        }
 
         try
         {
@@ -716,7 +756,10 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     private async Task HandleDeleteChannelRequested(ServerViewModel server)
     {
-        if (_mainWindow is null) return;
+        if (_mainWindow is null)
+        {
+            return;
+        }
 
         string channelName = Chat.CurrentChannelName;
         if (string.IsNullOrEmpty(channelName) || !string.Equals(Chat.CurrentServerUrl, server.ServerUrl, StringComparison.OrdinalIgnoreCase))
@@ -738,7 +781,10 @@ public sealed class MainWindowViewModel : ViewModelBase
             $"Are you sure you want to delete #{channelName}?\nThis will remove all messages permanently.",
             ButtonEnum.YesNo);
         ButtonResult confirm = await confirmBox.ShowWindowDialogAsync(_mainWindow);
-        if (confirm != ButtonResult.Yes) return;
+        if (confirm != ButtonResult.Yes)
+        {
+            return;
+        }
 
         try
         {
@@ -814,6 +860,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                             }
                         });
 
+                        _ = RefreshOnlineUsersAsync(serverUrl, channel.Name);
                         return;
                     }
                     catch (EchoHub.Client.Services.ChannelPasswordRequiredException)
@@ -830,6 +877,12 @@ public sealed class MainWindowViewModel : ViewModelBase
 
                         if (string.IsNullOrEmpty(pwd))
                         {
+                            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                            {
+                                Chat.OnlineUsers.Clear();
+                                Chat.ShowOnlineUsers = false;
+                                Chat.OnlineUserCount = string.Empty;
+                            });
                             return;
                         }
 
@@ -837,6 +890,12 @@ public sealed class MainWindowViewModel : ViewModelBase
                     }
                     catch
                     {
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                        {
+                            Chat.OnlineUsers.Clear();
+                            Chat.ShowOnlineUsers = false;
+                            Chat.OnlineUserCount = string.Empty;
+                        });
                         return;
                     }
                 }

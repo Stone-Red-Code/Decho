@@ -204,9 +204,9 @@ public sealed class ConnectionService : IDisposable
 
         if (password is not null)
         {
-            var salt = RoomCrypto.GenerateSalt();
-            var derived = RoomCrypto.DeriveKeys(password, salt);
-            var roomKey = RoomCrypto.GenerateRoomKey();
+            byte[] salt = RoomCrypto.GenerateSalt();
+            RoomCrypto.DerivedKeys derived = RoomCrypto.DeriveKeys(password, salt);
+            byte[] roomKey = RoomCrypto.GenerateRoomKey();
             wirePassword = derived.AuthKeyHex;
             saltB64 = Convert.ToBase64String(salt);
             wrappedKey = RoomCrypto.WrapRoomKey(roomKey, derived.KeyEncryptionKey);

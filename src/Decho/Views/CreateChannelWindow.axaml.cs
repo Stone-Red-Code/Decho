@@ -19,7 +19,7 @@ public partial class CreateChannelWindow : Window
         string name = ChannelName.Text?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(name))
         {
-            ChannelName.Focus();
+            _ = ChannelName.Focus();
             return;
         }
 
