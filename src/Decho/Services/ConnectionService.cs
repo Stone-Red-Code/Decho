@@ -6,6 +6,7 @@ using EchoHub.Client.UI.Dialogs;
 using EchoHub.Core.Constants;
 using EchoHub.Core.DTOs;
 using EchoHub.Core.Models;
+using EchoHub.Core.Security;
 
 using System.Collections.ObjectModel;
 
@@ -190,6 +191,31 @@ public sealed class ConnectionService : IDisposable
         }
 
         await entry.Manager.SendMessageAsync(channelName, content);
+    }
+
+    public async Task<ChannelDto?> CreateChannelAsync(string serverUrl, string name, string? topic, bool isPublic, string? password = null)
+    {
+        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
+        {
+            throw new InvalidOperationException("Not connected to server");
+        }
+
+        string? wirePassword = null, saltB64 = null, wrappedKey = null;
+
+        if (password is not null)
+        {
+            var salt = RoomCrypto.GenerateSalt();
+            var derived = RoomCrypto.DeriveKeys(password, salt);
+            var roomKey = RoomCrypto.GenerateRoomKey();
+            wirePassword = derived.AuthKeyHex;
+            saltB64 = Convert.ToBase64String(salt);
+            wrappedKey = RoomCrypto.WrapRoomKey(roomKey, derived.KeyEncryptionKey);
+            // Store the room key locally so we can decrypt messages immediately
+            entry.Manager.RoomKeys.StoreKey(name, roomKey);
+        }
+
+        ChannelDto? channel = await entry.ApiClient.CreateChannelAsync(name, topic, isPublic, wirePassword, saltB64, wrappedKey);
+        return channel;
     }
 
     public async Task<List<MessageModel>> JoinChannelAsync(string serverUrl, string channelName, string? password = null)

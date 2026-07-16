@@ -496,6 +496,8 @@ public sealed class MainWindowViewModel : ViewModelBase
             serverVm.ConnectRequested += () => HandleServerConnectRequested(serverVm);
             serverVm.DisconnectRequested += () => HandleServerDisconnectRequested(serverVm);
             serverVm.RemoveRequested += () => HandleServerRemoveRequested(serverVm);
+            serverVm.CreateChannelRequested += () => HandleCreateChannelRequested(serverVm);
+            serverVm.DeleteChannelRequested += () => HandleDeleteChannelRequested(serverVm);
             _ = serverVm.WhenAnyValue(s => s.SelectedChannel)
                 .Where(channel => channel is not null)
                 .Subscribe(channel => Sidebar.SelectedChannel = channel!);
@@ -657,6 +659,112 @@ public sealed class MainWindowViewModel : ViewModelBase
                     StatusText = $"Upload failed: {ex.Message}");
             }
         });
+    }
+
+    private async Task HandleCreateChannelRequested(ServerViewModel server)
+    {
+        if (_mainWindow is null) return;
+
+        CreateChannelWindow dialog = new CreateChannelWindow();
+        bool? result = await dialog.ShowDialog<bool?>(_mainWindow);
+        if (result != true) return;
+
+        try
+        {
+            StatusText = "Creating channel...";
+
+            ChannelDto? channel = await ConnectionService.CreateChannelAsync(
+                server.ServerUrl, dialog.ResultName!, dialog.ResultTopic, dialog.ResultIsPublic, dialog.ResultPassword);
+
+            if (channel is null)
+            {
+                StatusText = "Failed to create channel";
+                return;
+            }
+
+            List<MessageModel> history = await ConnectionService.JoinChannelAsync(server.ServerUrl, channel.Name);
+
+            ChannelModel channelModel = new ChannelModel(
+                channel.Id.ToString(), channel.Name, [], channel.Topic, channel.IsPublic, channel.IsProtected);
+
+            ServerViewModel? serverVm = Sidebar.GetServer(server.ServerUrl);
+            if (serverVm is not null)
+            {
+                ChannelViewModel channelVm = new ChannelViewModel(channelModel);
+
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    serverVm.Channels.Add(channelVm);
+                    serverVm.SelectedChannel = channelVm;
+
+                    foreach (MessageModel msg in history)
+                    {
+                        channelVm.AddMessage(msg);
+                    }
+
+                    StatusText = $"Created #{channel.Name}";
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard(
+                "Error", $"Could not create channel:\n{ex.Message}", ButtonEnum.Ok);
+            _ = await box.ShowWindowDialogAsync(_mainWindow);
+        }
+    }
+
+    private async Task HandleDeleteChannelRequested(ServerViewModel server)
+    {
+        if (_mainWindow is null) return;
+
+        string channelName = Chat.CurrentChannelName;
+        if (string.IsNullOrEmpty(channelName) || !string.Equals(Chat.CurrentServerUrl, server.ServerUrl, StringComparison.OrdinalIgnoreCase))
+        {
+            StatusText = "No channel selected on this server";
+            return;
+        }
+
+        if (string.Equals(channelName, HubConstants.DefaultChannel, StringComparison.OrdinalIgnoreCase))
+        {
+            IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard(
+                "Cannot Delete", $"The #{HubConstants.DefaultChannel} channel cannot be deleted.", ButtonEnum.Ok);
+            _ = await box.ShowWindowDialogAsync(_mainWindow);
+            return;
+        }
+
+        IMsBox<ButtonResult> confirmBox = MessageBoxManager.GetMessageBoxStandard(
+            "Delete Channel",
+            $"Are you sure you want to delete #{channelName}?\nThis will remove all messages permanently.",
+            ButtonEnum.YesNo);
+        ButtonResult confirm = await confirmBox.ShowWindowDialogAsync(_mainWindow);
+        if (confirm != ButtonResult.Yes) return;
+
+        try
+        {
+            await ConnectionService.DeleteChannelAsync(server.ServerUrl, channelName);
+
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                ChannelViewModel? channelVm = server.Channels.FirstOrDefault(c => c.Name == channelName);
+                if (channelVm is not null)
+                {
+                    _ = server.Channels.Remove(channelVm);
+                }
+
+                ChannelViewModel? defaultChannel = server.Channels.FirstOrDefault(c => c.Name == HubConstants.DefaultChannel)
+                    ?? server.Channels.FirstOrDefault();
+                server.SelectedChannel = defaultChannel;
+
+                StatusText = $"Deleted #{channelName}";
+            });
+        }
+        catch (Exception ex)
+        {
+            IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard(
+                "Error", $"Could not delete channel:\n{ex.Message}", ButtonEnum.Ok);
+            _ = await box.ShowWindowDialogAsync(_mainWindow);
+        }
     }
 
     private void HandleChannelSelected(ChannelViewModel? channel)

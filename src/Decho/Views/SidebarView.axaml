@@ -49,6 +49,13 @@
 														  IsVisible="{Binding IsConnected}" />
 												<MenuItem Header="Remove Server"
 														  Command="{Binding RemoveCommand}" />
+											<Separator />
+											<MenuItem Header="Create Channel"
+													  Command="{Binding CreateChannelCommand}"
+													  IsVisible="{Binding IsConnected}" />
+											<MenuItem Header="Delete Channel"
+													  Command="{Binding DeleteChannelCommand}"
+													  IsVisible="{Binding IsConnected}" />
 											</ContextMenu>
 										</Button.ContextMenu>
 									</Button>

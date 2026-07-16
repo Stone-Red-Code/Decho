@@ -25,6 +25,18 @@ public sealed class ServerViewModel : ViewModelBase
         remove => _removeRequested = (Func<Task>?)Delegate.Remove(_removeRequested, value);
     }
 
+    public event Func<Task>? CreateChannelRequested
+    {
+        add => _createChannelRequested = (Func<Task>?)Delegate.Combine(_createChannelRequested, value);
+        remove => _createChannelRequested = (Func<Task>?)Delegate.Remove(_createChannelRequested, value);
+    }
+
+    public event Func<Task>? DeleteChannelRequested
+    {
+        add => _deleteChannelRequested = (Func<Task>?)Delegate.Combine(_deleteChannelRequested, value);
+        remove => _deleteChannelRequested = (Func<Task>?)Delegate.Remove(_deleteChannelRequested, value);
+    }
+
     private bool _isConnected;
     private bool _isConnecting;
     private string? _connectedUser;
@@ -34,6 +46,10 @@ public sealed class ServerViewModel : ViewModelBase
     private Func<Task>? _disconnectRequested;
 
     private Func<Task>? _removeRequested;
+
+    private Func<Task>? _createChannelRequested;
+
+    private Func<Task>? _deleteChannelRequested;
 
     public ServerModel Model { get; }
 
@@ -48,6 +64,10 @@ public sealed class ServerViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> DisconnectCommand { get; }
 
     public ReactiveCommand<Unit, Unit> RemoveCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> CreateChannelCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> DeleteChannelCommand { get; }
 
     public ChannelViewModel? SelectedChannel
     {
@@ -135,6 +155,8 @@ public sealed class ServerViewModel : ViewModelBase
         ConnectCommand = ReactiveCommand.CreateFromTask(ConnectAsync);
         DisconnectCommand = ReactiveCommand.CreateFromTask(DisconnectAsync);
         RemoveCommand = ReactiveCommand.CreateFromTask(RemoveAsync);
+        CreateChannelCommand = ReactiveCommand.CreateFromTask(CreateChannelAsync);
+        DeleteChannelCommand = ReactiveCommand.CreateFromTask(DeleteChannelAsync);
     }
 
     public void SyncFromModel()
@@ -166,6 +188,22 @@ public sealed class ServerViewModel : ViewModelBase
         if (_removeRequested is not null)
         {
             await _removeRequested();
+        }
+    }
+
+    private async Task CreateChannelAsync()
+    {
+        if (_createChannelRequested is not null)
+        {
+            await _createChannelRequested();
+        }
+    }
+
+    private async Task DeleteChannelAsync()
+    {
+        if (_deleteChannelRequested is not null)
+        {
+            await _deleteChannelRequested();
         }
     }
 }
