@@ -12,7 +12,7 @@ namespace Decho.Views;
 public partial class MessageItemView : UserControl
 {
     private CancellationTokenSource? _loadCts;
-    private bool _pendingLoad;
+    private string? _loadedMessageId;
 
     public MessageItemView()
     {
@@ -23,20 +23,37 @@ public partial class MessageItemView : UserControl
 
     private void OnDataContextChanged(object? sender, EventArgs args)
     {
-        _loadCts?.Cancel();
-        _loadCts = new CancellationTokenSource();
-        _pendingLoad = DataContext is MessageViewModel msg && msg.IsImage && msg.AttachmentUrl is not null;
-    }
-
-    private void OnLoaded(object? sender, RoutedEventArgs e)
-    {
-        if (!_pendingLoad)
+        if (DataContext is MessageViewModel newMsg && newMsg.Model.Id == _loadedMessageId)
         {
             return;
         }
 
-        _pendingLoad = false;
-        MessageViewModel msg = (MessageViewModel)DataContext!;
+        _loadCts?.Cancel();
+        _loadCts = new CancellationTokenSource();
+        this.FindControl<Image>("MessageImage")?.ClearValue(Image.SourceProperty);
+        _loadedMessageId = null;
+    }
+
+    private void OnLoaded(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MessageViewModel msg || !msg.IsImage || msg.AttachmentUrl is null)
+        {
+            return;
+        }
+
+        if (msg.Model.Id == _loadedMessageId)
+        {
+            return;
+        }
+
+        _loadedMessageId = msg.Model.Id;
+
+        if (msg.CachedImage is not null)
+        {
+            this.FindControl<Image>("MessageImage")!.Source = msg.CachedImage;
+            return;
+        }
+
         _ = LoadImageAsync(msg, _loadCts!.Token);
     }
 
@@ -62,8 +79,8 @@ public partial class MessageItemView : UserControl
             using MemoryStream stream = new MemoryStream(bytes);
             Bitmap bitmap = new Bitmap(stream);
             ct.ThrowIfCancellationRequested();
-            Image? image = this.FindControl<Image>("MessageImage");
-            _ = image?.Source = bitmap;
+            msg.CachedImage = bitmap;
+            this.FindControl<Image>("MessageImage")!.Source = bitmap;
         }
         catch
         {

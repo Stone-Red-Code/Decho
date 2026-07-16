@@ -1,4 +1,5 @@
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 
 using Decho.Models;
 
@@ -9,6 +10,8 @@ namespace Decho.ViewModels;
 public sealed class MessageViewModel(MessageModel model) : ViewModelBase
 {
     public MessageModel Model { get; } = model;
+
+    public Bitmap? CachedImage { get; set; }
 
     public string AuthorName => Model.Author.DisplayName;
 

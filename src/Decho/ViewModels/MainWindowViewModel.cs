@@ -606,14 +606,17 @@ public sealed class MainWindowViewModel : ViewModelBase
                 try
                 {
                     List<MessageModel> history = await ConnectionService.JoinChannelAsync(serverUrl, channel.Name);
+
                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                    {
-                        channel.ClearMessages();
-                        foreach (MessageModel msg in history)
                         {
-                            channel.AddMessage(msg);
-                        }
-                    });
+                            if (channel.Messages.Count == 0)
+                            {
+                                foreach (MessageModel msg in history)
+                                {
+                                    channel.AddMessage(msg);
+                                }
+                            }
+                        });
                 }
                 catch
                 {
