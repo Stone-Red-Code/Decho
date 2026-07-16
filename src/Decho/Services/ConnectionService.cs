@@ -7,6 +7,7 @@ using EchoHub.Core.Constants;
 using EchoHub.Core.DTOs;
 using EchoHub.Core.Models;
 using EchoHub.Core.Security;
+using EchoHub.Core.Services;
 
 using System.Collections.ObjectModel;
 
@@ -309,9 +310,41 @@ public sealed class ConnectionService : IDisposable
             return;
         }
 
-        await using FileStream stream = File.OpenRead(filePath);
         string fileName = Path.GetFileName(filePath);
-        OutgoingAttachment attachment = new OutgoingAttachment(stream, fileName);
+        OutgoingAttachment attachment;
+
+        if (entry.Manager.RoomKeys.TryGetKey(channelName, out byte[]? roomKey))
+        {
+            // End-to-end encrypted channel: encrypt the blob locally, declare its kind,
+            // and room-encrypt an image ASCII preview — the server stores the ciphertext as-is.
+            byte[] bytes = await File.ReadAllBytesAsync(filePath);
+            string declaredKind;
+            string? preview = null;
+
+            await using (var ms = new MemoryStream(bytes))
+            {
+                if (FileValidationHelper.IsValidImage(ms))
+                {
+                    declaredKind = "image";
+                    var (w, h) = ImageToAsciiService.GetDimensions(size);
+                    ms.Position = 0;
+                    preview = RoomCrypto.EncryptText(new ImageToAsciiService().ConvertToAscii(ms, w, h), roomKey);
+                }
+                else
+                {
+                    declaredKind = FileValidationHelper.IsAudioFile(fileName) ? "audio" : "file";
+                }
+            }
+
+            byte[] encryptedBlob = RoomCrypto.EncryptBytes(bytes, roomKey);
+            attachment = new OutgoingAttachment(new MemoryStream(encryptedBlob), fileName, declaredKind, preview);
+        }
+        else
+        {
+            await using FileStream stream = File.OpenRead(filePath);
+            attachment = new OutgoingAttachment(stream, fileName);
+        }
+
         _ = await entry.ApiClient.SendMessageWithAttachmentsAsync(channelName, "", [attachment], size);
     }
 
@@ -362,7 +395,7 @@ public sealed class ConnectionService : IDisposable
             : null;
     }
 
-    public async Task<string?> DownloadAttachmentAsync(string serverUrl, string relativeUrl, string fileName)
+    public async Task<string?> DownloadAttachmentAsync(string serverUrl, string channelName, string relativeUrl, string fileName)
     {
         if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
         {
@@ -371,7 +404,26 @@ public sealed class ConnectionService : IDisposable
 
         try
         {
-            return await entry.ApiClient.DownloadFileToTempAsync(relativeUrl, fileName);
+            string? tempPath = await entry.ApiClient.DownloadFileToTempAsync(relativeUrl, fileName);
+            if (tempPath is null)
+            {
+                return null;
+            }
+
+            if (entry.Manager.RoomKeys.TryGetKey(channelName, out byte[]? roomKey))
+            {
+                try
+                {
+                    byte[] encrypted = await File.ReadAllBytesAsync(tempPath);
+                    await File.WriteAllBytesAsync(tempPath, RoomCrypto.DecryptBytes(encrypted, roomKey));
+                }
+                catch
+                {
+                    // Not room ciphertext — leave the downloaded bytes as-is.
+                }
+            }
+
+            return tempPath;
         }
         catch
         {
@@ -379,7 +431,7 @@ public sealed class ConnectionService : IDisposable
         }
     }
 
-    public async Task<byte[]?> DownloadImageBytesAsync(string serverUrl, string relativeUrl)
+    public async Task<byte[]?> DownloadImageBytesAsync(string serverUrl, string channelName, string relativeUrl)
     {
         if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
         {
@@ -403,6 +455,19 @@ public sealed class ConnectionService : IDisposable
             {
                 // Ignore if deletion fails
             }
+
+            if (entry.Manager.RoomKeys.TryGetKey(channelName, out byte[]? roomKey))
+            {
+                try
+                {
+                    bytes = RoomCrypto.DecryptBytes(bytes, roomKey);
+                }
+                catch
+                {
+                    // Not room ciphertext — leave the downloaded bytes as-is.
+                }
+            }
+
             return bytes;
         }
         catch

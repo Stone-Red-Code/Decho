@@ -215,7 +215,7 @@ public partial class MessageItemView : UserControl
             }
 
             byte[]? bytes = await mainVm.ConnectionService.DownloadImageBytesAsync(
-                msg.ServerUrl ?? "", att.Url);
+                msg.ServerUrl ?? "", msg.Model.ChannelName, att.Url);
 
             cts.Token.ThrowIfCancellationRequested();
             if (bytes is null || bytes.Length == 0)
@@ -294,7 +294,8 @@ public partial class MessageItemView : UserControl
             return;
         }
 
-        string? tempPath = await mainVm.ConnectionService.DownloadAttachmentAsync(msg.ServerUrl ?? "", att.Url, att.FileName);
+        string? tempPath = await mainVm.ConnectionService.DownloadAttachmentAsync(
+            msg.ServerUrl ?? "", msg.Model.ChannelName, att.Url, att.FileName);
 
         if (tempPath is null)
         {
