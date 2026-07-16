@@ -11,5 +11,14 @@
   
     <Application.Styles>
         <RomzetronTheme  />
+        <Style Selector="Button.IconButton">
+            <Setter Property="Background" Value="Transparent" />
+            <Style Selector="^:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="#15FFFFFF" />
+            </Style>
+            <Style Selector="^:pressed /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="#25FFFFFF" />
+            </Style>
+        </Style>
     </Application.Styles>
 </Application>

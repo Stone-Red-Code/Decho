@@ -27,7 +27,8 @@
 					DockPanel.Dock="Right"
 					Background="Transparent"
 					Foreground="{DynamicResource UiTheme08}"
-					HorizontalAlignment="Right" />
+					HorizontalAlignment="Right"
+					Classes="IconButton" />
 
 		<Button i:Attached.Icon="fa-plus"
 				Command="{Binding AddServerCommand}"
@@ -35,7 +36,8 @@
 				Background="Transparent"
 				Foreground="{DynamicResource UiTheme08}"
 				HorizontalAlignment="Right"
-				ToolTip.Tip="Add Server" />
+				ToolTip.Tip="Add Server"
+				Classes="IconButton" />
 		</DockPanel>
 		<views:SidebarView Grid.Row="1"
 						   Grid.Column="0"

@@ -38,7 +38,8 @@
 											Foreground="{DynamicResource UiTheme08}"
 											VerticalAlignment="Center"
 											i:Attached.Icon="fa-cog"
-											Click="OnSettingsClicked">
+											Click="OnSettingsClicked"
+											Classes="IconButton">
 										<Button.ContextMenu>
 											<ContextMenu>
 												<MenuItem Header="Connect"

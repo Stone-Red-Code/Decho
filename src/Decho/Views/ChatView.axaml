@@ -24,7 +24,8 @@
 					Foreground="{DynamicResource UiTheme08}"
 					Command="{Binding ToggleUsersPanelCommand}"
 					VerticalAlignment="Top"
-					HorizontalAlignment="Right" />
+					HorizontalAlignment="Right"
+					Classes="IconButton" />
 		</Grid>
 		<views:MessageListView Grid.Row="2" />
 		<views:MessageComposerView Grid.Row="3"
