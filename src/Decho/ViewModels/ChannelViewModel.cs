@@ -30,6 +30,8 @@ public sealed class ChannelViewModel(ChannelModel model) : ViewModelBase
 
     public bool IsProtected => Model.IsProtected;
 
+    public bool IsNotProtected => !Model.IsProtected;
+
     public bool IsLocked
     {
         get => field;

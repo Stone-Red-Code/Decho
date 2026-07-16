@@ -13,7 +13,10 @@
         <ListBox.ItemTemplate>
             <DataTemplate x:DataType="vm:ChannelViewModel">
                 <Grid ColumnDefinitions="Auto, *, Auto" Margin="2 0">
-                    <i:Icon Grid.Column="0" Value="fa-hashtag" FontWeight="Bold" Margin="0 0 4 1" VerticalAlignment="Center" />
+                    <Grid Grid.Column="0" Margin="0 0 4 0">
+                        <i:Icon Value="fa-hashtag" FontWeight="Bold" VerticalAlignment="Center" IsVisible="{Binding IsNotProtected}" />
+                        <i:Icon Value="fa-lock" FontWeight="Bold" VerticalAlignment="Center" IsVisible="{Binding IsProtected}" />
+                    </Grid>
                     <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                     <Border Grid.Column="2"
                             IsVisible="{Binding HasUnread}"
