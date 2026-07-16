@@ -3,40 +3,33 @@ using System.Text.RegularExpressions;
 
 namespace Decho.ViewModels;
 
-public sealed class AutocompleteController : ViewModelBase
+public sealed class AutocompleteController(IEnumerable<AutocompleteProvider> providers) : ViewModelBase
 {
-    private readonly List<AutocompleteProvider> _providers;
-
     private static readonly Regex TriggerPattern = new(@"([@#])(\w*)$", RegexOptions.Compiled);
-
+    private readonly List<AutocompleteProvider> _providers = providers.ToList();
     public ObservableCollection<string> FilteredItems { get; } = [];
 
     public bool ShowPopup
     {
-        get => field;
+        get;
         set => this.RaiseAndSetIfChanged(ref field, value);
     }
 
     public int SelectedIndex
     {
-        get => field;
+        get;
         set => this.RaiseAndSetIfChanged(ref field, value);
     }
 
     public string FilterText
     {
-        get => field;
+        get;
         set => this.RaiseAndSetIfChanged(ref field, value);
     }
 
     public AutocompleteProvider? ActiveProvider { get; private set; }
 
     public int TriggerCharIndex { get; private set; }
-
-    public AutocompleteController(IEnumerable<AutocompleteProvider> providers)
-    {
-        _providers = providers.ToList();
-    }
 
     public void Update(string text)
     {

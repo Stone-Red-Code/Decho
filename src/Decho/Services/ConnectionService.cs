@@ -35,86 +35,6 @@ public sealed class ConnectionService : IDisposable
     private readonly Dictionary<string, ServerConnection> _connections = new(StringComparer.OrdinalIgnoreCase);
     internal IReadOnlyDictionary<string, ServerConnection> Connections => _connections;
 
-    private async Task<ServerModel> ConnectCoreAsync(ConnectDialogResult dialogResult)
-    {
-        ConnectionManager conn = new ConnectionManager();
-
-        ConnectResult result;
-        try
-        {
-            result = await conn.ConnectAsync(dialogResult, _ => { });
-        }
-        catch
-        {
-            await conn.DisposeAsync();
-            throw;
-        }
-
-        LoginResponse login = result.Login;
-        UserModel userModel = new UserModel(login.Username, login.DisplayName ?? login.Username, login.NicknameColor);
-
-        ObservableCollection<ChannelModel> channels = [];
-        ServerModel serverModel = new ServerModel(
-            Guid.NewGuid().ToString("N"),
-            new Uri(dialogResult.ServerUrl).Host,
-            channels,
-            dialogResult.ServerUrl,
-            isConnected: true,
-            connectedUser: login.Username);
-
-        ServerConnection serverEntry = new ServerConnection(conn, conn.Api!, serverModel, userModel);
-
-        foreach (ChannelDto ch in result.Channels)
-        {
-            ChannelModel channelModel = ChannelModelFromDto(ch);
-            channels.Add(channelModel);
-        }
-
-        WireConnectionEvents(serverEntry, conn);
-
-        _connections[dialogResult.ServerUrl] = serverEntry;
-        SaveRefreshToken(dialogResult.ServerUrl, dialogResult.RememberMe);
-        ServerAdded?.Invoke(serverModel);
-
-        AutoJoinRemainingChannels(dialogResult.ServerUrl, result.Channels);
-
-        return serverModel;
-    }
-
-    private async void AutoJoinRemainingChannels(string serverUrl, List<ChannelDto> channels)
-    {
-        ClientConfig config = ConfigManager.Load();
-        List<string> leftChannels = config.SavedServers
-            .FirstOrDefault(s => string.Equals(s.Url, serverUrl, StringComparison.OrdinalIgnoreCase))
-            ?.LeftChannels ?? [];
-
-        foreach (ChannelDto ch in channels)
-        {
-            if (string.Equals(ch.Name, HubConstants.DefaultChannel, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            if (leftChannels.Contains(ch.Name, StringComparer.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            try
-            {
-                _ = await JoinChannelAsync(serverUrl, ch.Name);
-            }
-            catch (EchoHub.Client.Services.ChannelPasswordRequiredException)
-            {
-                // protected channel — join stays manual
-            }
-            catch
-            {
-                // skip channels we can't join
-            }
-        }
-    }
-
     public async Task<ServerModel> ConnectAsync(string serverUrl, string username, string password, bool isRegister, bool rememberMe)
     {
         ConnectDialogResult dialogResult = new ConnectDialogResult(
@@ -127,24 +47,6 @@ public sealed class ConnectionService : IDisposable
         ConnectDialogResult dialogResult = new ConnectDialogResult(
             serverUrl, username, "", false, rememberMe, refreshToken);
         _ = await ConnectCoreAsync(dialogResult);
-    }
-
-    private async Task<ServerConnection?> CleanupConnectionAsync(string serverUrl)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return null;
-        }
-
-        entry.Server.IsConnected = false;
-        entry.Server.IsConnecting = false;
-
-        await entry.Manager.CleanupAsync();
-        entry.ApiClient.Dispose();
-        await entry.Manager.DisposeAsync();
-
-        _ = _connections.Remove(serverUrl);
-        return entry;
     }
 
     public async Task DisconnectAsync(string serverUrl)
@@ -161,26 +63,6 @@ public sealed class ConnectionService : IDisposable
         _ = await CleanupConnectionAsync(serverUrl);
         RemoveServerFromConfig(serverUrl);
         ServerRemoved?.Invoke(serverUrl);
-    }
-
-    private static void ModifyConfig(string serverUrl, Action<ClientConfig, SavedServer?> action)
-    {
-        ClientConfig config = ConfigManager.Load();
-        SavedServer? saved = config.SavedServers.FirstOrDefault(s =>
-            string.Equals(s.Url, serverUrl, StringComparison.OrdinalIgnoreCase));
-        action(config, saved);
-        ConfigManager.Save(config);
-    }
-
-    private static void RemoveServerFromConfig(string serverUrl)
-    {
-        ModifyConfig(serverUrl, (config, saved) =>
-        {
-            if (saved is not null)
-            {
-                _ = config.SavedServers.Remove(saved);
-            }
-        });
     }
 
     public async Task SendMessageAsync(string serverUrl, string channelName, string content)
@@ -252,17 +134,6 @@ public sealed class ConnectionService : IDisposable
         if (saved is not null && !saved.LeftChannels.Contains(channelName, StringComparer.OrdinalIgnoreCase))
         {
             saved.LeftChannels.Add(channelName);
-            ConfigManager.Save(config);
-        }
-    }
-
-    private static void RemoveFromLeftChannels(string serverUrl, string channelName)
-    {
-        ClientConfig config = ConfigManager.Load();
-        SavedServer? saved = config.SavedServers
-            .FirstOrDefault(s => string.Equals(s.Url, serverUrl, StringComparison.OrdinalIgnoreCase));
-        if (saved is not null && saved.LeftChannels.Remove(channelName))
-        {
             ConfigManager.Save(config);
         }
     }
@@ -589,6 +460,135 @@ public sealed class ConnectionService : IDisposable
     internal ServerConnection? GetConnection(string serverUrl)
     {
         return _connections.TryGetValue(serverUrl, out ServerConnection? conn) ? conn : null;
+    }
+
+    private static void ModifyConfig(string serverUrl, Action<ClientConfig, SavedServer?> action)
+    {
+        ClientConfig config = ConfigManager.Load();
+        SavedServer? saved = config.SavedServers.FirstOrDefault(s =>
+            string.Equals(s.Url, serverUrl, StringComparison.OrdinalIgnoreCase));
+        action(config, saved);
+        ConfigManager.Save(config);
+    }
+
+    private static void RemoveServerFromConfig(string serverUrl)
+    {
+        ModifyConfig(serverUrl, (config, saved) =>
+        {
+            if (saved is not null)
+            {
+                _ = config.SavedServers.Remove(saved);
+            }
+        });
+    }
+
+    private static void RemoveFromLeftChannels(string serverUrl, string channelName)
+    {
+        ClientConfig config = ConfigManager.Load();
+        SavedServer? saved = config.SavedServers
+            .FirstOrDefault(s => string.Equals(s.Url, serverUrl, StringComparison.OrdinalIgnoreCase));
+        if (saved is not null && saved.LeftChannels.Remove(channelName))
+        {
+            ConfigManager.Save(config);
+        }
+    }
+
+    private async Task<ServerModel> ConnectCoreAsync(ConnectDialogResult dialogResult)
+    {
+        ConnectionManager conn = new ConnectionManager();
+
+        ConnectResult result;
+        try
+        {
+            result = await conn.ConnectAsync(dialogResult, _ => { });
+        }
+        catch
+        {
+            await conn.DisposeAsync();
+            throw;
+        }
+
+        LoginResponse login = result.Login;
+        UserModel userModel = new UserModel(login.Username, login.DisplayName ?? login.Username, login.NicknameColor);
+
+        ObservableCollection<ChannelModel> channels = [];
+        ServerModel serverModel = new ServerModel(
+            Guid.NewGuid().ToString("N"),
+            new Uri(dialogResult.ServerUrl).Host,
+            channels,
+            dialogResult.ServerUrl,
+            isConnected: true,
+            connectedUser: login.Username);
+
+        ServerConnection serverEntry = new ServerConnection(conn, conn.Api!, serverModel, userModel);
+
+        foreach (ChannelDto ch in result.Channels)
+        {
+            ChannelModel channelModel = ChannelModelFromDto(ch);
+            channels.Add(channelModel);
+        }
+
+        WireConnectionEvents(serverEntry, conn);
+
+        _connections[dialogResult.ServerUrl] = serverEntry;
+        SaveRefreshToken(dialogResult.ServerUrl, dialogResult.RememberMe);
+        ServerAdded?.Invoke(serverModel);
+
+        AutoJoinRemainingChannels(dialogResult.ServerUrl, result.Channels);
+
+        return serverModel;
+    }
+
+    private async void AutoJoinRemainingChannels(string serverUrl, List<ChannelDto> channels)
+    {
+        ClientConfig config = ConfigManager.Load();
+        List<string> leftChannels = config.SavedServers
+            .FirstOrDefault(s => string.Equals(s.Url, serverUrl, StringComparison.OrdinalIgnoreCase))
+            ?.LeftChannels ?? [];
+
+        foreach (ChannelDto ch in channels)
+        {
+            if (string.Equals(ch.Name, HubConstants.DefaultChannel, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (leftChannels.Contains(ch.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            try
+            {
+                _ = await JoinChannelAsync(serverUrl, ch.Name);
+            }
+            catch (EchoHub.Client.Services.ChannelPasswordRequiredException)
+            {
+                // protected channel — join stays manual
+            }
+            catch
+            {
+                // skip channels we can't join
+            }
+        }
+    }
+
+    private async Task<ServerConnection?> CleanupConnectionAsync(string serverUrl)
+    {
+        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
+        {
+            return null;
+        }
+
+        entry.Server.IsConnected = false;
+        entry.Server.IsConnecting = false;
+
+        await entry.Manager.CleanupAsync();
+        entry.ApiClient.Dispose();
+        await entry.Manager.DisposeAsync();
+
+        _ = _connections.Remove(serverUrl);
+        return entry;
     }
 
     private void SaveRefreshToken(string serverUrl, bool rememberMe)

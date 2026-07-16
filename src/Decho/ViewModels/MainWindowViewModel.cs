@@ -1060,4 +1060,3 @@ public sealed class MainWindowViewModel : ViewModelBase
         return Chat.CurrentServerUrl;
     }
 }
-

@@ -34,13 +34,13 @@ public sealed class ChannelViewModel(ChannelModel model) : ViewModelBase
 
     public bool IsLocked
     {
-        get => field;
+        get;
         set => this.RaiseAndSetIfChanged(ref field, value);
     }
 
     public int UnreadCount
     {
-        get => field;
+        get;
         set
         {
             if (field == value)
@@ -60,7 +60,7 @@ public sealed class ChannelViewModel(ChannelModel model) : ViewModelBase
 
     public int MentionCount
     {
-        get => field;
+        get;
         set
         {
             if (field == value)

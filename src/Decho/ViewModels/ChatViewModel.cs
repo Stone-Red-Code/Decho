@@ -39,7 +39,7 @@ public sealed class ChatViewModel : ViewModelBase
 
     public bool ShowOnlineUsers
     {
-        get => field;
+        get;
         set => this.RaiseAndSetIfChanged(ref field, value);
     }
 
@@ -47,7 +47,7 @@ public sealed class ChatViewModel : ViewModelBase
 
     public string OnlineUserCount
     {
-        get => field;
+        get;
         set => this.RaiseAndSetIfChanged(ref field, value);
     } = string.Empty;
 
@@ -61,11 +61,6 @@ public sealed class ChatViewModel : ViewModelBase
     {
         Composer = new MessageComposerViewModel();
         ToggleUsersPanelCommand = ReactiveCommand.Create(ToggleUsersPanel);
-    }
-
-    private void ToggleUsersPanel()
-    {
-        ShowOnlineUsers = !ShowOnlineUsers;
     }
 
     public void SetChannel(ChannelViewModel? channel, string serverUrl = "", bool isServerConnected = true)
@@ -144,5 +139,10 @@ public sealed class ChatViewModel : ViewModelBase
         HasTopic = false;
         OnlineUsers.Clear();
         OnlineUserCount = string.Empty;
+    }
+
+    private void ToggleUsersPanel()
+    {
+        ShowOnlineUsers = !ShowOnlineUsers;
     }
 }

@@ -5,13 +5,14 @@ using EchoHub.Core.Models;
 
 namespace Decho.ViewModels;
 
-public sealed class UserViewModel : ViewModelBase
+public sealed class UserViewModel(UserPresenceDto dto) : ViewModelBase
 {
-    public string Username { get; }
-    public string DisplayName { get; }
-    public string? NicknameColor { get; }
-    public string? StatusMessage { get; }
-    public ServerRole Role { get; }
+    private UserStatus _status = dto.Status;
+    public string Username { get; } = dto.Username;
+    public string DisplayName { get; } = dto.DisplayName ?? dto.Username;
+    public string? NicknameColor { get; } = dto.NicknameColor;
+    public string? StatusMessage { get; } = dto.StatusMessage;
+    public ServerRole Role { get; } = dto.Role;
 
     public UserStatus Status
     {
@@ -29,8 +30,6 @@ public sealed class UserViewModel : ViewModelBase
             this.RaisePropertyChanged(nameof(StatusText));
         }
     }
-
-    private UserStatus _status;
 
     public string FullName => DisplayName ?? Username;
 
@@ -71,14 +70,4 @@ public sealed class UserViewModel : ViewModelBase
         UserStatus.Invisible => "Invisible",
         _ => "Offline",
     };
-
-    public UserViewModel(UserPresenceDto dto)
-    {
-        Username = dto.Username;
-        DisplayName = dto.DisplayName ?? dto.Username;
-        NicknameColor = dto.NicknameColor;
-        StatusMessage = dto.StatusMessage;
-        Role = dto.Role;
-        _status = dto.Status;
-    }
 }

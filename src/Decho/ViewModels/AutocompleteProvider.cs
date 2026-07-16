@@ -1,23 +1,10 @@
 namespace Decho.ViewModels;
 
-public sealed class AutocompleteProvider
+public sealed class AutocompleteProvider(char trigger, Func<IEnumerable<string>> itemsSource, string insertPrefix, int maxResults = 10)
 {
-    public char Trigger { get; }
-    public Func<IEnumerable<string>> ItemsSource { get; }
-    public Func<string, string, bool> Filter { get; }
-    public Func<string, string> FormatInsertion { get; }
-    public int MaxResults { get; }
-
-    public AutocompleteProvider(
-        char trigger,
-        Func<IEnumerable<string>> itemsSource,
-        string insertPrefix,
-        int maxResults = 10)
-    {
-        Trigger = trigger;
-        ItemsSource = itemsSource;
-        Filter = (item, filter) => item.StartsWith(filter, StringComparison.OrdinalIgnoreCase);
-        FormatInsertion = item => $"{insertPrefix}{item} ";
-        MaxResults = maxResults;
-    }
+    public char Trigger { get; } = trigger;
+    public Func<IEnumerable<string>> ItemsSource { get; } = itemsSource;
+    public Func<string, string, bool> Filter { get; } = (item, filter) => item.StartsWith(filter, StringComparison.OrdinalIgnoreCase);
+    public Func<string, string> FormatInsertion { get; } = item => $"{insertPrefix}{item} ";
+    public int MaxResults { get; } = maxResults;
 }

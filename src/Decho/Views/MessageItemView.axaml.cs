@@ -16,6 +16,7 @@ namespace Decho.Views;
 
 public partial class MessageItemView : UserControl
 {
+    private static readonly Regex MentionRegex = new(@"@(\w+)", RegexOptions.Compiled);
     private CancellationTokenSource? _loadCts;
     private string? _loadedMessageId;
 
@@ -24,8 +25,6 @@ public partial class MessageItemView : UserControl
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
     }
-
-    private static readonly Regex MentionRegex = new(@"@(\w+)", RegexOptions.Compiled);
 
     private void OnDataContextChanged(object? sender, EventArgs args)
     {

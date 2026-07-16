@@ -51,11 +51,6 @@ public sealed partial class ProfileWindow : Window
         LastSeenText.Text = profile.LastSeenAt.ToString("g");
     }
 
-    private void OnCloseClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        Close();
-    }
-
     private static string FormatStatus(UserStatus status)
     {
         return status switch
@@ -89,5 +84,10 @@ public sealed partial class ProfileWindow : Window
             ServerRole.Member => "Member",
             _ => role.ToString(),
         };
+    }
+
+    private void OnCloseClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        Close();
     }
 }

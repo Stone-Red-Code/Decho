@@ -13,10 +13,9 @@ public sealed class MessageComposerViewModel : ViewModelBase
 
     public event Action<string, string>? FileUploadRequested;
 
-    private CommandHandler? _commandHandler;
-
     private readonly ObservableCollection<UserViewModel> _onlineUsers = [];
     private readonly ObservableCollection<string> _channelNames = [];
+    private CommandHandler? _commandHandler;
 
     public string Draft
     {
