@@ -157,7 +157,7 @@ public sealed class ConnectionService : IDisposable
         await entry.Manager.SendMessageAsync(channelName, content);
     }
 
-    public async Task<List<MessageModel>> JoinChannelAsync(string serverUrl, string channelName)
+    public async Task<List<MessageModel>> JoinChannelAsync(string serverUrl, string channelName, string? password = null)
     {
         if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
         {
@@ -166,7 +166,7 @@ public sealed class ConnectionService : IDisposable
 
         if (entry.Manager.TrackChannel(channelName))
         {
-            var outcome = await entry.Manager.JoinChannelAsync(channelName);
+            var outcome = await entry.Manager.JoinChannelAsync(channelName, password);
             return outcome.History.Select(m => MessageModelFromDto(m, entry)).ToList();
         }
 
@@ -480,7 +480,8 @@ public sealed class ConnectionService : IDisposable
             dto.Name,
             [],
             dto.Topic,
-            dto.IsPublic);
+            dto.IsPublic,
+            dto.IsProtected);
     }
 
     internal static MessageModel MessageModelFromDto(MessageDto dto, ServerConnection entry)

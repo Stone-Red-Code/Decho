@@ -28,6 +28,14 @@ public sealed class ChannelViewModel(ChannelModel model) : ViewModelBase
 
     public bool IsPublic => Model.IsPublic;
 
+    public bool IsProtected => Model.IsProtected;
+
+    public bool IsLocked
+    {
+        get => field;
+        set => this.RaiseAndSetIfChanged(ref field, value);
+    }
+
     public ObservableCollection<MessageViewModel> Messages { get; } = new ObservableCollection<MessageViewModel>(
             model.Messages.Select(message => new MessageViewModel(message)));
 

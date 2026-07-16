@@ -11,6 +11,7 @@ using EchoHub.Core.DTOs;
 using EchoHub.Core.Models;
 
 using MsBox.Avalonia;
+using MsBox.Avalonia.Base;
 using MsBox.Avalonia.Enums;
 
 using System.Reactive;
@@ -86,11 +87,11 @@ public sealed class MainWindowViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            var box = MessageBoxManager.GetMessageBoxStandard(
+            IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard(
                 "Connection Failed",
                 $"Could not connect to server:\n{ex.Message}",
                 ButtonEnum.Ok);
-            await box.ShowWindowDialogAsync(_mainWindow);
+            _ = await box.ShowWindowDialogAsync(_mainWindow);
         }
     }
 
@@ -136,6 +137,57 @@ public sealed class MainWindowViewModel : ViewModelBase
         return await dialog.ShowDialog<ConnectDialogResult?>(_mainWindow);
     }
 
+    private async Task<string?> ShowPasswordPromptWindowAsync()
+    {
+        var window = new Avalonia.Controls.Window
+        {
+            Title = "Channel Password",
+            Width = 320,
+            Height = 180,
+            WindowStartupLocation = Avalonia.Controls.WindowStartupLocation.CenterOwner,
+            SizeToContent = Avalonia.Controls.SizeToContent.Height,
+            CanResize = false,
+        };
+
+        var passwordBox = new Avalonia.Controls.TextBox { Watermark = "Password", PasswordChar = '*' };
+        string? result = null;
+
+        var joinBtn = new Avalonia.Controls.Button { Content = "Join", IsDefault = true };
+        var cancelBtn = new Avalonia.Controls.Button { Content = "Cancel", IsCancel = true };
+
+        joinBtn.Click += (_, _) =>
+        {
+            result = passwordBox.Text;
+            window.Close();
+        };
+        cancelBtn.Click += (_, _) => window.Close();
+
+        var buttons = new Avalonia.Controls.StackPanel
+        {
+            Orientation = Avalonia.Layout.Orientation.Horizontal,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+            Spacing = 8,
+            Children = { cancelBtn, joinBtn },
+        };
+
+        var panel = new Avalonia.Controls.StackPanel
+        {
+            Margin = new Avalonia.Thickness(12),
+            Spacing = 8,
+            Children =
+            {
+                new Avalonia.Controls.TextBlock { Text = "This channel is password protected." },
+                new Avalonia.Controls.TextBlock { Text = "Enter the channel password:" },
+                passwordBox,
+                buttons,
+            },
+        };
+
+        window.Content = panel;
+        await window.ShowDialog(_mainWindow!);
+        return result;
+    }
+
     private void WireCommandHandlerEvents()
     {
         _commandHandler.OnSetStatus += async (status, message) =>
@@ -162,7 +214,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            List<MessageModel> channel = await ConnectionService.JoinChannelAsync(serverUrl, channelName);
+            List<MessageModel> channel = await ConnectionService.JoinChannelAsync(serverUrl, channelName, password);
             EnsureChannelInList(serverUrl, channelName);
             ChannelModel? channelModel = FindChannel(serverUrl, channelName);
             if (channelModel is not null)
@@ -456,10 +508,11 @@ public sealed class MainWindowViewModel : ViewModelBase
                 }
 
                 Sidebar.Servers.Insert(insertIndex, serverVm);
-                if (serverVm.Channels.Count > 0)
-                {
-                    serverVm.SelectedChannel = serverVm.Channels[0];
-                }
+
+                ChannelViewModel? defaultChannel = serverVm.Channels.FirstOrDefault(c => c.Name == HubConstants.DefaultChannel);
+                defaultChannel ??= serverVm.Channels.FirstOrDefault(c => c.IsPublic);
+                defaultChannel ??= serverVm.Channels.FirstOrDefault();
+                serverVm.SelectedChannel = defaultChannel;
 
                 StatusText = $"Connected to {server.Name}";
             });
@@ -601,14 +654,26 @@ public sealed class MainWindowViewModel : ViewModelBase
         {
             Chat.Composer.SetCommandHandler(new CommandHandler());
 
+            if (channel.IsProtected && channel.Messages.Count == 0)
+            {
+                channel.IsLocked = true;
+                Chat.Composer.IsConnected = false;
+            }
+
             _ = Task.Run(async () =>
             {
-                try
+                string? password = null;
+                while (true)
                 {
-                    List<MessageModel> history = await ConnectionService.JoinChannelAsync(serverUrl, channel.Name);
+                    try
+                    {
+                        List<MessageModel> history = await ConnectionService.JoinChannelAsync(serverUrl, channel.Name, password);
 
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                         {
+                            channel.IsLocked = false;
+                            Chat.Composer.IsConnected = isServerConnected;
+
                             if (channel.Messages.Count == 0)
                             {
                                 foreach (MessageModel msg in history)
@@ -617,10 +682,32 @@ public sealed class MainWindowViewModel : ViewModelBase
                                 }
                             }
                         });
-                }
-                catch
-                {
-                    // Channel might not be available
+
+                        return;
+                    }
+                    catch (EchoHub.Client.Services.ChannelPasswordRequiredException)
+                    {
+                        string? pwd = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+                        {
+                            if (_mainWindow is null)
+                            {
+                                return null;
+                            }
+
+                            return await ShowPasswordPromptWindowAsync();
+                        });
+
+                        if (string.IsNullOrEmpty(pwd))
+                        {
+                            return;
+                        }
+
+                        password = pwd;
+                    }
+                    catch
+                    {
+                        return;
+                    }
                 }
             });
         }
@@ -697,11 +784,11 @@ public sealed class MainWindowViewModel : ViewModelBase
         catch (Exception ex)
         {
             serverVm.IsConnecting = false;
-            var box = MessageBoxManager.GetMessageBoxStandard(
+            IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard(
                 "Connection Failed",
                 $"Could not connect to server:\n{ex.Message}",
                 ButtonEnum.Ok);
-            await box.ShowWindowDialogAsync(_mainWindow);
+            _ = await box.ShowWindowDialogAsync(_mainWindow);
         }
     }
 
