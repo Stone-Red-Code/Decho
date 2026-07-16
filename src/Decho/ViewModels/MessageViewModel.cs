@@ -3,15 +3,13 @@ using Avalonia.Media.Imaging;
 
 using Decho.Models;
 
-using EchoHub.Core.Models;
+using EchoHub.Core.DTOs;
 
 namespace Decho.ViewModels;
 
 public sealed class MessageViewModel(MessageModel model) : ViewModelBase
 {
     public MessageModel Model { get; } = model;
-
-    public Bitmap? CachedImage { get; set; }
 
     public string AuthorName => Model.Author.DisplayName;
 
@@ -40,21 +38,13 @@ public sealed class MessageViewModel(MessageModel model) : ViewModelBase
 
     public string? ServerUrl => Model.ServerUrl;
 
-    public MessageType Type => Model.Type;
+    public Dictionary<string, Bitmap> ImageCache { get; } = [];
 
-    public bool HasAttachment => Model.AttachmentUrl is not null;
+    public IReadOnlyList<AttachmentDto> Attachments => Model.Attachments;
 
-    public string? AttachmentFileName => Model.AttachmentFileName;
-
-    public string? AttachmentUrl => Model.AttachmentUrl;
-
-    public bool IsImage => Type == MessageType.Image;
+    public bool HasAttachments => Attachments.Count > 0;
 
     public bool ShowContent => !string.IsNullOrEmpty(Content);
-
-    public bool IsAudio => Type == MessageType.Audio;
-
-    public bool IsFile => Type == MessageType.File;
 
     public string TimeText
     {

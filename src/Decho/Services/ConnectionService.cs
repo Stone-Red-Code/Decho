@@ -574,25 +574,7 @@ public sealed class ConnectionService : IDisposable
             dto.SenderUsername,
             dto.SenderNicknameColor);
 
-        MessageType type = MessageType.Text;
-        string? attachmentUrl = null;
-        string? attachmentFileName = null;
-        long? attachmentFileSize = null;
-
-        if (dto.Attachments is { Count: > 0 })
-        {
-            AttachmentDto first = dto.Attachments[0];
-            type = first.Kind switch
-            {
-                AttachmentKind.Image => MessageType.Image,
-                AttachmentKind.Audio => MessageType.Audio,
-                AttachmentKind.File => MessageType.File,
-                _ => MessageType.File
-            };
-            attachmentUrl = first.Url;
-            attachmentFileName = first.FileName;
-            attachmentFileSize = first.FileSize;
-        }
+        List<AttachmentDto> attachments = dto.Attachments ?? [];
 
         return new MessageModel(
             dto.Id.ToString("N"),
@@ -601,10 +583,7 @@ public sealed class ConnectionService : IDisposable
             dto.Content,
             dto.ChannelName,
             entry.Server.ServerUrl,
-            type,
-            attachmentUrl,
-            attachmentFileName,
-            attachmentFileSize);
+            attachments);
     }
 
     internal ServerConnection? GetConnection(string serverUrl)

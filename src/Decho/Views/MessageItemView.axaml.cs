@@ -8,6 +8,7 @@ using Avalonia.Platform.Storage;
 using Decho.ViewModels;
 
 using EchoHub.Core.DTOs;
+using EchoHub.Core.Models;
 
 using System.Text.RegularExpressions;
 
@@ -22,7 +23,6 @@ public partial class MessageItemView : UserControl
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
-        Loaded += OnLoaded;
     }
 
     private static readonly Regex MentionRegex = new(@"@(\w+)", RegexOptions.Compiled);
@@ -36,11 +36,11 @@ public partial class MessageItemView : UserControl
 
         _loadCts?.Cancel();
         _loadCts = new CancellationTokenSource();
-        this.FindControl<Image>("MessageImage")?.ClearValue(Image.SourceProperty);
         _loadedMessageId = null;
 
         if (DataContext is MessageViewModel msg)
         {
+            _loadedMessageId = msg.Model.Id;
             BuildMessageInlines(msg.Content);
         }
     }
@@ -78,31 +78,40 @@ public partial class MessageItemView : UserControl
         }
     }
 
-    private void OnLoaded(object? sender, RoutedEventArgs e)
+    private async void OnAttachmentImageLoaded(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is not MessageViewModel msg || !msg.IsImage || msg.AttachmentUrl is null)
+        if (sender is not Image image)
         {
             return;
         }
 
-        if (msg.Model.Id == _loadedMessageId)
+        if (image.DataContext is not AttachmentDto att)
         {
             return;
         }
 
-        _loadedMessageId = msg.Model.Id;
-
-        if (msg.CachedImage is not null)
+        if (att.Kind != AttachmentKind.Image)
         {
-            this.FindControl<Image>("MessageImage")!.Source = msg.CachedImage;
             return;
         }
 
-        _ = LoadImageAsync(msg, _loadCts!.Token);
-    }
+        if (DataContext is not MessageViewModel msg)
+        {
+            return;
+        }
 
-    private async Task LoadImageAsync(MessageViewModel msg, CancellationToken ct)
-    {
+        CancellationTokenSource? cts = _loadCts;
+        if (cts is null)
+        {
+            return;
+        }
+
+        if (msg.ImageCache.TryGetValue(att.Url, out Bitmap? cached))
+        {
+            image.Source = cached;
+            return;
+        }
+
         try
         {
             MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
@@ -112,9 +121,9 @@ public partial class MessageItemView : UserControl
             }
 
             byte[]? bytes = await mainVm.ConnectionService.DownloadImageBytesAsync(
-                msg.ServerUrl ?? "", msg.AttachmentUrl!);
+                msg.ServerUrl ?? "", att.Url);
 
-            ct.ThrowIfCancellationRequested();
+            cts.Token.ThrowIfCancellationRequested();
             if (bytes is null || bytes.Length == 0)
             {
                 return;
@@ -122,9 +131,9 @@ public partial class MessageItemView : UserControl
 
             using MemoryStream stream = new MemoryStream(bytes);
             Bitmap bitmap = new Bitmap(stream);
-            ct.ThrowIfCancellationRequested();
-            msg.CachedImage = bitmap;
-            this.FindControl<Image>("MessageImage")!.Source = bitmap;
+            cts.Token.ThrowIfCancellationRequested();
+            msg.ImageCache[att.Url] = bitmap;
+            image.Source = bitmap;
         }
         catch
         {
@@ -162,15 +171,19 @@ public partial class MessageItemView : UserControl
         }
     }
 
-    private async void OnDownloadClicked(object? sender, RoutedEventArgs e)
+    private async void OnAttachmentDownloadClicked(object? sender, RoutedEventArgs e)
     {
-        MessageViewModel? msg = this.GetDataContext<MessageViewModel>();
-        if (msg is null)
+        if (sender is not Button button)
         {
             return;
         }
 
-        if (msg.AttachmentUrl is null)
+        if (button.DataContext is not AttachmentDto att)
+        {
+            return;
+        }
+
+        if (DataContext is not MessageViewModel msg)
         {
             return;
         }
@@ -187,7 +200,7 @@ public partial class MessageItemView : UserControl
             return;
         }
 
-        string? tempPath = await mainVm.ConnectionService.DownloadAttachmentAsync(msg.ServerUrl ?? "", msg.AttachmentUrl, msg.AttachmentFileName ?? "download");
+        string? tempPath = await mainVm.ConnectionService.DownloadAttachmentAsync(msg.ServerUrl ?? "", att.Url, att.FileName);
 
         if (tempPath is null)
         {
@@ -196,7 +209,7 @@ public partial class MessageItemView : UserControl
 
         IStorageFile? file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            SuggestedFileName = msg.AttachmentFileName ?? "download",
+            SuggestedFileName = att.FileName,
         });
 
         if (file?.TryGetLocalPath() is string savePath)

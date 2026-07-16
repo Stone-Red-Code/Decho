@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
 			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 			 xmlns:vm="using:Decho.ViewModels"
+			 xmlns:dto="using:EchoHub.Core.DTOs"
 			 x:Class="Decho.Views.MessageItemView"
 			 x:DataType="vm:MessageViewModel">
 	<Grid Margin="5" ColumnDefinitions="Auto, *">
@@ -27,22 +28,29 @@
 					   VerticalAlignment="Top"
 					   TextWrapping="Wrap"
 					   IsVisible="{Binding ShowContent}" />
-			<Image x:Name="MessageImage"
-				   MaxHeight="300"
-				   MaxWidth="400"
-				   HorizontalAlignment="Left"
-				   IsVisible="{Binding IsImage}"
-				   Margin="0 4 0 0" />
-			<StackPanel IsVisible="{Binding HasAttachment}" Margin="0 4 0 0" Spacing="2">
-				<TextBlock Text="{Binding AttachmentFileName}"
-						   FontSize="11"
-						   Opacity="0.7" />
-				<Button Content="Download"
-						Click="OnDownloadClicked"
-						FontSize="11"
-						Padding="5 1"
-						HorizontalAlignment="Left" />
-			</StackPanel>
+			<ItemsControl ItemsSource="{Binding Attachments}"
+						  IsVisible="{Binding HasAttachments}"
+						  Margin="0 4 0 0">
+				<ItemsControl.ItemTemplate>
+					<DataTemplate x:DataType="dto:AttachmentDto">
+						<StackPanel Margin="0 2 0 2">
+							<Image Loaded="OnAttachmentImageLoaded"
+								   MaxHeight="300"
+								   MaxWidth="400"
+								   HorizontalAlignment="Left" />
+							<TextBlock Text="{Binding FileName}"
+									   FontSize="11"
+									   Opacity="0.7" />
+							<Button Content="Download"
+									Click="OnAttachmentDownloadClicked"
+									FontSize="11"
+									Padding="5 1"
+									HorizontalAlignment="Left"
+									Margin="0 2 0 0" />
+						</StackPanel>
+					</DataTemplate>
+				</ItemsControl.ItemTemplate>
+			</ItemsControl>
 		</StackPanel>
 	</Grid>
 </UserControl>

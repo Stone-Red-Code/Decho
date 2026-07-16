@@ -1,8 +1,8 @@
-using EchoHub.Core.Models;
+using EchoHub.Core.DTOs;
 
 namespace Decho.Models;
 
-public sealed class MessageModel(string id, UserModel author, DateTimeOffset sentAt, string content, string channelName, string? serverUrl = null, MessageType type = MessageType.Text, string? attachmentUrl = null, string? attachmentFileName = null, long? attachmentFileSize = null)
+public sealed class MessageModel(string id, UserModel author, DateTimeOffset sentAt, string content, string channelName, string? serverUrl = null, List<AttachmentDto>? attachments = null)
 {
     public string Id { get; } = id;
 
@@ -16,11 +16,5 @@ public sealed class MessageModel(string id, UserModel author, DateTimeOffset sen
 
     public string? ServerUrl { get; } = serverUrl;
 
-    public MessageType Type { get; } = type;
-
-    public string? AttachmentUrl { get; } = attachmentUrl;
-
-    public string? AttachmentFileName { get; } = attachmentFileName;
-
-    public long? AttachmentFileSize { get; } = attachmentFileSize;
+    public List<AttachmentDto> Attachments { get; } = attachments ?? [];
 }
