@@ -6,6 +6,7 @@ using Decho.Views;
 
 using EchoHub.Client.Commands;
 using EchoHub.Client.Config;
+using EchoHub.Client.Services;
 using EchoHub.Core.Constants;
 using EchoHub.Core.DTOs;
 using EchoHub.Core.Models;
@@ -22,6 +23,7 @@ namespace Decho.ViewModels;
 public sealed class MainWindowViewModel : ViewModelBase
 {
     private readonly CommandHandler _commandHandler;
+    private readonly NotificationSoundService _notificationService;
     private Window? _mainWindow;
 
     public string Title { get; } = "Decho";
@@ -44,6 +46,7 @@ public sealed class MainWindowViewModel : ViewModelBase
     {
         ConnectionService = new ConnectionService();
         _commandHandler = new CommandHandler();
+        _notificationService = new NotificationSoundService(ConfigManager.Load().Notifications);
 
         Sidebar = new SidebarViewModel();
         Chat = new ChatViewModel();
@@ -360,7 +363,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             await ConnectionService.NukeChannelAsync(serverUrl, channel);
         };
 
-        _commandHandler.OnTestSound += () => Task.CompletedTask;
+        _commandHandler.OnTestSound += _notificationService.PlayTestAsync;
 
         _commandHandler.OnQuit += () =>
         {
@@ -554,11 +557,29 @@ public sealed class MainWindowViewModel : ViewModelBase
 
         ConnectionService.MessageReceived += (serverUrl, message) =>
         {
+            string? username = ConnectionService.GetCurrentUsername(serverUrl);
+            bool isMention = !string.IsNullOrEmpty(username)
+                && message.Content.Contains($"@{username}", StringComparison.OrdinalIgnoreCase);
+
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
                 ChannelViewModel? channelVm = FindChannelViewModel(serverUrl, message.ChannelName);
-                channelVm?.AddMessage(message);
+                if (channelVm is not null)
+                {
+                    channelVm.AddMessage(message);
+                    bool isSelected = string.Equals(Chat.CurrentChannelName, message.ChannelName, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(Chat.CurrentServerUrl, serverUrl, StringComparison.OrdinalIgnoreCase);
+                    if (!isSelected)
+                    {
+                        channelVm.IncrementUnread(isMention);
+                    }
+                }
             });
+
+            if (isMention)
+            {
+                _ = _notificationService.PlayAsync();
+            }
         };
 
         ConnectionService.ErrorOccurred += (serverUrl, error) =>
@@ -645,6 +666,8 @@ public sealed class MainWindowViewModel : ViewModelBase
             Chat.SetChannel(null);
             return;
         }
+
+        channel.ClearUnread();
 
         string serverUrl = FindServerUrlForChannel(channel);
         bool isServerConnected = Sidebar.GetServer(serverUrl)?.IsConnected ?? false;

@@ -25,12 +25,12 @@ public sealed class MessageViewModel(MessageModel model) : ViewModelBase
                 return Brushes.White;
             }
 
-            try 
-            { 
+            try
+            {
                 return new SolidColorBrush(Color.Parse(color));
             }
             catch
-            { 
+            {
                 return null;
             }
         }

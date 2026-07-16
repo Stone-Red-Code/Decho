@@ -36,8 +36,67 @@ public sealed class ChannelViewModel(ChannelModel model) : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref field, value);
     }
 
+    public int UnreadCount
+    {
+        get => field;
+        set
+        {
+            if (field == value)
+            {
+                return;
+            }
+
+            field = value;
+            this.RaisePropertyChanged();
+            this.RaisePropertyChanged(nameof(HasUnread));
+            this.RaisePropertyChanged(nameof(BadgeText));
+            this.RaisePropertyChanged(nameof(BadgeColor));
+        }
+    }
+
+    public bool HasUnread => UnreadCount > 0;
+
+    public int MentionCount
+    {
+        get => field;
+        set
+        {
+            if (field == value)
+            {
+                return;
+            }
+
+            field = value;
+            this.RaisePropertyChanged();
+            this.RaisePropertyChanged(nameof(HasMentions));
+            this.RaisePropertyChanged(nameof(BadgeText));
+            this.RaisePropertyChanged(nameof(BadgeColor));
+        }
+    }
+
+    public bool HasMentions => MentionCount > 0;
+
+    public string BadgeColor => HasMentions ? "#E53935" : "#78909C";
+
+    public string BadgeText => HasMentions ? MentionCount.ToString() : UnreadCount.ToString();
+
     public ObservableCollection<MessageViewModel> Messages { get; } = new ObservableCollection<MessageViewModel>(
             model.Messages.Select(message => new MessageViewModel(message)));
+
+    public void IncrementUnread(bool isMention = false)
+    {
+        UnreadCount++;
+        if (isMention)
+        {
+            MentionCount++;
+        }
+    }
+
+    public void ClearUnread()
+    {
+        UnreadCount = 0;
+        MentionCount = 0;
+    }
 
     public void ClearMessages()
     {

@@ -12,12 +12,24 @@
              SelectedItem="{Binding SelectedChannel, Mode=TwoWay}">
         <ListBox.ItemTemplate>
             <DataTemplate x:DataType="vm:ChannelViewModel">
-                <TextBlock>
-                    <InlineUIContainer BaselineAlignment="Bottom">
-                        <i:Icon Value="fa-hashtag" FontWeight="Bold" Margin="0 0 0 1" />
-                    </InlineUIContainer>
-                    <Run Text="{Binding Name}" />
-                </TextBlock>
+                <Grid ColumnDefinitions="Auto, *, Auto" Margin="2 0">
+                    <i:Icon Grid.Column="0" Value="fa-hashtag" FontWeight="Bold" Margin="0 0 4 1" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    <Border Grid.Column="2"
+                            IsVisible="{Binding HasUnread}"
+                            Background="{Binding BadgeColor}"
+                            CornerRadius="8"
+                            MinWidth="16"
+                            Height="16"
+                            Padding="4 0"
+                            Margin="4 0 0 0">
+                        <TextBlock Text="{Binding BadgeText}"
+                                   FontSize="11"
+                                   Foreground="White"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                </Grid>
             </DataTemplate>
         </ListBox.ItemTemplate>
     </ListBox>
