@@ -75,7 +75,43 @@ public sealed class ConnectionService : IDisposable
         SaveRefreshToken(dialogResult.ServerUrl, dialogResult.RememberMe);
         ServerAdded?.Invoke(serverModel);
 
+        AutoJoinRemainingChannels(dialogResult.ServerUrl, result.Channels);
+
         return serverModel;
+    }
+
+    private async void AutoJoinRemainingChannels(string serverUrl, List<ChannelDto> channels)
+    {
+        ClientConfig config = ConfigManager.Load();
+        List<string> leftChannels = config.SavedServers
+            .FirstOrDefault(s => string.Equals(s.Url, serverUrl, StringComparison.OrdinalIgnoreCase))
+            ?.LeftChannels ?? [];
+
+        foreach (ChannelDto ch in channels)
+        {
+            if (string.Equals(ch.Name, HubConstants.DefaultChannel, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (leftChannels.Contains(ch.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            try
+            {
+                _ = await JoinChannelAsync(serverUrl, ch.Name);
+            }
+            catch (EchoHub.Client.Services.ChannelPasswordRequiredException)
+            {
+                // protected channel — join stays manual
+            }
+            catch
+            {
+                // skip channels we can't join
+            }
+        }
     }
 
     public async Task<ServerModel> ConnectAsync(string serverUrl, string username, string password, bool isRegister, bool rememberMe)
@@ -166,9 +202,11 @@ public sealed class ConnectionService : IDisposable
         if (entry.Manager.TrackChannel(channelName))
         {
             JoinOutcome outcome = await entry.Manager.JoinChannelAsync(channelName, password);
+            RemoveFromLeftChannels(serverUrl, channelName);
             return outcome.History.Select(m => MessageModelFromDto(m, entry)).ToList();
         }
 
+        RemoveFromLeftChannels(serverUrl, channelName);
         List<MessageDto> existing = await entry.Manager.GetHistoryAsync(channelName);
         return existing.Select(m => MessageModelFromDto(m, entry)).ToList();
     }
@@ -181,6 +219,26 @@ public sealed class ConnectionService : IDisposable
         }
 
         await entry.Manager.LeaveChannelAsync(channelName);
+
+        ClientConfig config = ConfigManager.Load();
+        SavedServer? saved = config.SavedServers
+            .FirstOrDefault(s => string.Equals(s.Url, serverUrl, StringComparison.OrdinalIgnoreCase));
+        if (saved is not null && !saved.LeftChannels.Contains(channelName, StringComparer.OrdinalIgnoreCase))
+        {
+            saved.LeftChannels.Add(channelName);
+            ConfigManager.Save(config);
+        }
+    }
+
+    private static void RemoveFromLeftChannels(string serverUrl, string channelName)
+    {
+        ClientConfig config = ConfigManager.Load();
+        SavedServer? saved = config.SavedServers
+            .FirstOrDefault(s => string.Equals(s.Url, serverUrl, StringComparison.OrdinalIgnoreCase));
+        if (saved is not null && saved.LeftChannels.Remove(channelName))
+        {
+            ConfigManager.Save(config);
+        }
     }
 
     public async Task<List<MessageModel>> GetHistoryAsync(string serverUrl, string channelName, int count = HubConstants.DefaultHistoryCount, int offset = 0)
