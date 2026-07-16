@@ -520,7 +520,7 @@ public sealed class MainWindowViewModel : ViewModelBase
     private async Task<string?> HandleCommandAsync(string commandText)
     {
         CommandResult result = await _commandHandler.HandleAsync(commandText);
-        if (result.Message is not null && !result.IsError)
+        if (result.Message is not null)
         {
             Chat.Messages.Add(new MessageViewModel(new MessageModel(
                 Guid.NewGuid().ToString("N"),
