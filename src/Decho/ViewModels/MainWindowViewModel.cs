@@ -154,7 +154,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             return Task.CompletedTask;
         };
 
-        _commandHandler.OnJoinChannel += async channelName =>
+        _commandHandler.OnJoinChannel += async (channelName, password) =>
         {
             string serverUrl = GetCurrentServerUrl();
             if (string.IsNullOrEmpty(serverUrl))
@@ -669,9 +669,10 @@ public sealed class MainWindowViewModel : ViewModelBase
             await ConnectionService.ConnectWithSavedTokenAsync(
                 saved.Url, saved.Username, saved.RefreshToken, saved.RememberMe);
         }
-        catch
+        catch (Exception ex)
         {
             serverVm.IsConnecting = false;
+            StatusText = $"Auto-connect failed for {saved.Name}: {ex.Message}";
         }
     }
 
@@ -692,8 +693,12 @@ public sealed class MainWindowViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            StatusText = $"Connection failed: {ex.Message}";
             serverVm.IsConnecting = false;
+            var box = MessageBoxManager.GetMessageBoxStandard(
+                "Connection Failed",
+                $"Could not connect to server:\n{ex.Message}",
+                ButtonEnum.Ok);
+            await box.ShowWindowDialogAsync(_mainWindow);
         }
     }
 

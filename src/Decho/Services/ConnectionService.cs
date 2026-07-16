@@ -166,8 +166,8 @@ public sealed class ConnectionService : IDisposable
 
         if (entry.Manager.TrackChannel(channelName))
         {
-            List<MessageDto> history = await entry.Manager.JoinChannelAsync(channelName);
-            return history.Select(m => MessageModelFromDto(m, entry)).ToList();
+            var outcome = await entry.Manager.JoinChannelAsync(channelName);
+            return outcome.History.Select(m => MessageModelFromDto(m, entry)).ToList();
         }
 
         List<MessageDto> existing = await entry.Manager.GetHistoryAsync(channelName);
@@ -357,7 +357,8 @@ public sealed class ConnectionService : IDisposable
 
         await using FileStream stream = File.OpenRead(filePath);
         string fileName = Path.GetFileName(filePath);
-        _ = await entry.ApiClient.UploadFileAsync(channelName, stream, fileName, size);
+        var attachment = new OutgoingAttachment(stream, fileName);
+        _ = await entry.ApiClient.SendMessageWithAttachmentsAsync(channelName, "", [attachment], size);
     }
 
     public void UpdateChannelTopic(string serverUrl, string channelName, string? topic)
@@ -489,6 +490,26 @@ public sealed class ConnectionService : IDisposable
             dto.SenderUsername,
             dto.SenderNicknameColor);
 
+        MessageType type = MessageType.Text;
+        string? attachmentUrl = null;
+        string? attachmentFileName = null;
+        long? attachmentFileSize = null;
+
+        if (dto.Attachments is { Count: > 0 })
+        {
+            AttachmentDto first = dto.Attachments[0];
+            type = first.Kind switch
+            {
+                AttachmentKind.Image => MessageType.Image,
+                AttachmentKind.Audio => MessageType.Audio,
+                AttachmentKind.File => MessageType.File,
+                _ => MessageType.File
+            };
+            attachmentUrl = first.Url;
+            attachmentFileName = first.FileName;
+            attachmentFileSize = first.FileSize;
+        }
+
         return new MessageModel(
             dto.Id.ToString("N"),
             author,
@@ -496,10 +517,10 @@ public sealed class ConnectionService : IDisposable
             dto.Content,
             dto.ChannelName,
             entry.Server.ServerUrl,
-            dto.Type,
-            dto.AttachmentUrl,
-            dto.AttachmentFileName,
-            dto.AttachmentFileSize);
+            type,
+            attachmentUrl,
+            attachmentFileName,
+            attachmentFileSize);
     }
 
     internal ServerConnection? GetConnection(string serverUrl)
