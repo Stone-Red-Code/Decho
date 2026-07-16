@@ -23,8 +23,8 @@
 						   FontSize="10"
 						   Margin="5 0 0 0" />
 			</StackPanel>
-			<TextBlock VerticalAlignment="Top"
-					   Text="{Binding Content}"
+			<TextBlock x:Name="MessageContent"
+					   VerticalAlignment="Top"
 					   TextWrapping="Wrap"
 					   IsVisible="{Binding ShowContent}" />
 			<Image x:Name="MessageImage"

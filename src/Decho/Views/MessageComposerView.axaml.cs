@@ -1,9 +1,12 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Platform.Storage;
 
 using Decho.ViewModels;
+
+using System.Globalization;
 
 namespace Decho.Views;
 
@@ -15,6 +18,104 @@ public partial class MessageComposerView : UserControl
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
         AddHandler(DragDrop.DropEvent, OnDrop);
         DragDrop.SetAllowDrop(this, true);
+        DataContextChanged += OnDataContextChanged;
+    }
+
+    private void OnDataContextChanged(object? sender, EventArgs e)
+    {
+        if (DataContext is MessageComposerViewModel vm)
+        {
+            vm.Autocomplete.PropertyChanged += (_, args) =>
+            {
+                if (args.PropertyName is nameof(AutocompleteController.ShowPopup) or nameof(AutocompleteController.FilterText))
+                {
+                    PositionPopupAtCursor();
+                }
+            };
+        }
+    }
+
+    private void OnTextBoxKeyDown(object? sender, KeyEventArgs e)
+    {
+        MessageComposerViewModel? vm = this.GetDataContext<MessageComposerViewModel>();
+        if (vm is null || !vm.Autocomplete.ShowPopup)
+        {
+            return;
+        }
+
+        if (e.Key == Key.Down)
+        {
+            vm.Autocomplete.SelectedIndex = Math.Min(vm.Autocomplete.SelectedIndex + 1, vm.Autocomplete.FilteredItems.Count - 1);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Up)
+        {
+            vm.Autocomplete.SelectedIndex = Math.Max(vm.Autocomplete.SelectedIndex - 1, 0);
+            e.Handled = true;
+        }
+        else if (e.Key is Key.Enter or Key.Tab)
+        {
+            if (vm.Autocomplete.SelectedIndex >= 0 && vm.Autocomplete.SelectedIndex < vm.Autocomplete.FilteredItems.Count)
+            {
+                InsertAutocomplete(vm.Autocomplete.FilteredItems[vm.Autocomplete.SelectedIndex]);
+                e.Handled = true;
+            }
+        }
+        else if (e.Key == Key.Escape)
+        {
+            vm.Autocomplete.ShowPopup = false;
+            e.Handled = true;
+        }
+    }
+
+    private void OnMentionPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is TextBlock textBlock && textBlock.DataContext is string item)
+        {
+            InsertAutocomplete(item);
+        }
+    }
+
+    private void InsertAutocomplete(string item)
+    {
+        MessageComposerViewModel? vm = this.GetDataContext<MessageComposerViewModel>();
+        if (vm is null)
+        {
+            return;
+        }
+
+        vm.InsertAutocomplete(item);
+        MessageTextBox.CaretIndex = MessageTextBox.Text?.Length ?? 0;
+        _ = MessageTextBox.Focus();
+    }
+
+    private void PositionPopupAtCursor()
+    {
+        MessageComposerViewModel? vm = this.GetDataContext<MessageComposerViewModel>();
+        if (vm is null)
+        {
+            return;
+        }
+
+        string text = MessageTextBox.Text ?? "";
+        int targetIndex = Math.Min(vm.Autocomplete.TriggerCharIndex, text.Length);
+        string beforeTarget = text[..targetIndex];
+
+        double width = 0;
+        if (beforeTarget.Length > 0)
+        {
+            FormattedText formatted = new(
+                beforeTarget,
+                CultureInfo.CurrentCulture,
+                FlowDirection.LeftToRight,
+                new Typeface(MessageTextBox.FontFamily, MessageTextBox.FontStyle, MessageTextBox.FontWeight, MessageTextBox.FontStretch),
+                MessageTextBox.FontSize,
+                null);
+            width = formatted.Width;
+        }
+
+        double maxOffset = Math.Max(0, MessageTextBox.Bounds.Width - 20);
+        MentionPopup.HorizontalOffset = Math.Min(width + 4, maxOffset);
     }
 
     private async void OnFileUploadClicked(object? sender, RoutedEventArgs e)

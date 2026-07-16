@@ -827,6 +827,12 @@ public sealed class MainWindowViewModel : ViewModelBase
         bool isServerConnected = Sidebar.GetServer(serverUrl)?.IsConnected ?? false;
         Chat.SetChannel(channel, serverUrl, isServerConnected);
 
+        ServerViewModel? currentServer = Sidebar.GetServer(serverUrl);
+        if (currentServer is not null)
+        {
+            Chat.Composer.UpdateAvailableChannels(currentServer.Channels.Select(c => c.Name));
+        }
+
         if (!string.IsNullOrEmpty(serverUrl))
         {
             Chat.Composer.SetCommandHandler(new CommandHandler());

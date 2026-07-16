@@ -1,11 +1,15 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 
 using Decho.ViewModels;
 
 using EchoHub.Core.DTOs;
+
+using System.Text.RegularExpressions;
 
 namespace Decho.Views;
 
@@ -21,6 +25,8 @@ public partial class MessageItemView : UserControl
         Loaded += OnLoaded;
     }
 
+    private static readonly Regex MentionRegex = new(@"@(\w+)", RegexOptions.Compiled);
+
     private void OnDataContextChanged(object? sender, EventArgs args)
     {
         if (DataContext is MessageViewModel newMsg && newMsg.Model.Id == _loadedMessageId)
@@ -32,6 +38,44 @@ public partial class MessageItemView : UserControl
         _loadCts = new CancellationTokenSource();
         this.FindControl<Image>("MessageImage")?.ClearValue(Image.SourceProperty);
         _loadedMessageId = null;
+
+        if (DataContext is MessageViewModel msg)
+        {
+            BuildMessageInlines(msg.Content);
+        }
+    }
+
+    private void BuildMessageInlines(string content)
+    {
+        TextBlock? tb = MessageContent;
+        if (tb is null)
+        {
+            return;
+        }
+
+        tb.Inlines?.Clear();
+
+        int lastIndex = 0;
+        foreach (Match match in MentionRegex.Matches(content))
+        {
+            if (match.Index > lastIndex)
+            {
+                tb.Inlines?.Add(new Run(content[lastIndex..match.Index]));
+            }
+
+            tb.Inlines?.Add(new Run(match.Value)
+            {
+                Foreground = new SolidColorBrush(Color.Parse("#FEE75C")),
+                FontWeight = FontWeight.Bold,
+            });
+
+            lastIndex = match.Index + match.Length;
+        }
+
+        if (lastIndex < content.Length)
+        {
+            tb.Inlines?.Add(new Run(content[lastIndex..]));
+        }
     }
 
     private void OnLoaded(object? sender, RoutedEventArgs e)

@@ -110,6 +110,7 @@ public sealed class ChatViewModel : ViewModelBase
         }
         OnlineUserCount = $"{users.Count}";
         ShowOnlineUsers = true;
+        Composer.UpdateAvailableUsers(OnlineUsers);
     }
 
     public void AddOnlineUser(UserPresenceDto user)
@@ -120,6 +121,7 @@ public sealed class ChatViewModel : ViewModelBase
             OnlineUserCount = $"{OnlineUsers.Count}";
         }
         ShowOnlineUsers = OnlineUsers.Count > 0;
+        Composer.UpdateAvailableUsers(OnlineUsers);
     }
 
     public void RemoveOnlineUser(string username)
@@ -131,6 +133,7 @@ public sealed class ChatViewModel : ViewModelBase
             OnlineUserCount = $"{OnlineUsers.Count}";
         }
         ShowOnlineUsers = OnlineUsers.Count > 0;
+        Composer.UpdateAvailableUsers(OnlineUsers);
     }
 
     public void ClearMessages()
