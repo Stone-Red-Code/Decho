@@ -139,21 +139,21 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     private async Task<string?> ShowPasswordPromptWindowAsync()
     {
-        var window = new Avalonia.Controls.Window
+        Window window = new Avalonia.Controls.Window
         {
             Title = "Channel Password",
             Width = 320,
             Height = 180,
-            WindowStartupLocation = Avalonia.Controls.WindowStartupLocation.CenterOwner,
-            SizeToContent = Avalonia.Controls.SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            SizeToContent = SizeToContent.Height,
             CanResize = false,
         };
 
-        var passwordBox = new Avalonia.Controls.TextBox { Watermark = "Password", PasswordChar = '*' };
+        TextBox passwordBox = new Avalonia.Controls.TextBox { Watermark = "Password", PasswordChar = '*' };
         string? result = null;
 
-        var joinBtn = new Avalonia.Controls.Button { Content = "Join", IsDefault = true };
-        var cancelBtn = new Avalonia.Controls.Button { Content = "Cancel", IsCancel = true };
+        Button joinBtn = new Avalonia.Controls.Button { Content = "Join", IsDefault = true };
+        Button cancelBtn = new Avalonia.Controls.Button { Content = "Cancel", IsCancel = true };
 
         joinBtn.Click += (_, _) =>
         {
@@ -162,7 +162,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         };
         cancelBtn.Click += (_, _) => window.Close();
 
-        var buttons = new Avalonia.Controls.StackPanel
+        StackPanel buttons = new Avalonia.Controls.StackPanel
         {
             Orientation = Avalonia.Layout.Orientation.Horizontal,
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
@@ -170,7 +170,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             Children = { cancelBtn, joinBtn },
         };
 
-        var panel = new Avalonia.Controls.StackPanel
+        StackPanel panel = new Avalonia.Controls.StackPanel
         {
             Margin = new Avalonia.Thickness(12),
             Spacing = 8,

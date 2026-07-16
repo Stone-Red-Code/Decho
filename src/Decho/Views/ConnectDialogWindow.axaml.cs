@@ -3,9 +3,8 @@ using Avalonia.Controls;
 using EchoHub.Client.Config;
 
 using MsBox.Avalonia;
+using MsBox.Avalonia.Base;
 using MsBox.Avalonia.Enums;
-
-using System.Linq;
 
 namespace Decho.Views;
 
@@ -69,8 +68,8 @@ public sealed partial class ConnectDialogWindow : Window
 
         if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(user))
         {
-            var box = MessageBoxManager.GetMessageBoxStandard("Validation", "Server URL and username are required.", ButtonEnum.Ok);
-            await box.ShowWindowDialogAsync(this);
+            IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard("Validation", "Server URL and username are required.", ButtonEnum.Ok);
+            _ = await box.ShowWindowDialogAsync(this);
             return;
         }
 
@@ -94,8 +93,8 @@ public sealed partial class ConnectDialogWindow : Window
         {
             if (string.IsNullOrEmpty(pass))
             {
-                var box = MessageBoxManager.GetMessageBoxStandard("Validation", "Password is required.", ButtonEnum.Ok);
-                await box.ShowWindowDialogAsync(this);
+                IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard("Validation", "Password is required.", ButtonEnum.Ok);
+                _ = await box.ShowWindowDialogAsync(this);
                 return;
             }
 
@@ -118,8 +117,8 @@ public sealed partial class ConnectDialogWindow : Window
 
         if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(user) || string.IsNullOrEmpty(pass))
         {
-            var box = MessageBoxManager.GetMessageBoxStandard("Validation", "Server URL, username, and password are required.", ButtonEnum.Ok);
-            await box.ShowWindowDialogAsync(this);
+            IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard("Validation", "Server URL, username, and password are required.", ButtonEnum.Ok);
+            _ = await box.ShowWindowDialogAsync(this);
             return;
         }
 

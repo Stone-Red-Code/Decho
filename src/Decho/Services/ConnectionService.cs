@@ -1,6 +1,5 @@
 using Decho.Models;
 
-using EchoHub.Client.Commands;
 using EchoHub.Client.Config;
 using EchoHub.Client.Services;
 using EchoHub.Client.UI.Dialogs;
@@ -90,7 +89,7 @@ public sealed class ConnectionService : IDisposable
     {
         ConnectDialogResult dialogResult = new ConnectDialogResult(
             serverUrl, username, "", false, rememberMe, refreshToken);
-        await ConnectCoreAsync(dialogResult);
+        _ = await ConnectCoreAsync(dialogResult);
     }
 
     private async Task<ServerConnection?> CleanupConnectionAsync(string serverUrl)
@@ -122,7 +121,7 @@ public sealed class ConnectionService : IDisposable
 
     public async Task RemoveServerAsync(string serverUrl)
     {
-        await CleanupConnectionAsync(serverUrl);
+        _ = await CleanupConnectionAsync(serverUrl);
         RemoveServerFromConfig(serverUrl);
         ServerRemoved?.Invoke(serverUrl);
     }
@@ -166,7 +165,7 @@ public sealed class ConnectionService : IDisposable
 
         if (entry.Manager.TrackChannel(channelName))
         {
-            var outcome = await entry.Manager.JoinChannelAsync(channelName, password);
+            JoinOutcome outcome = await entry.Manager.JoinChannelAsync(channelName, password);
             return outcome.History.Select(m => MessageModelFromDto(m, entry)).ToList();
         }
 
@@ -357,7 +356,7 @@ public sealed class ConnectionService : IDisposable
 
         await using FileStream stream = File.OpenRead(filePath);
         string fileName = Path.GetFileName(filePath);
-        var attachment = new OutgoingAttachment(stream, fileName);
+        OutgoingAttachment attachment = new OutgoingAttachment(stream, fileName);
         _ = await entry.ApiClient.SendMessageWithAttachmentsAsync(channelName, "", [attachment], size);
     }
 
@@ -441,11 +440,11 @@ public sealed class ConnectionService : IDisposable
             }
 
             byte[] bytes = await File.ReadAllBytesAsync(tempPath);
-            try 
-            { 
+            try
+            {
                 File.Delete(tempPath);
             }
-            catch 
+            catch
             {
                 // Ignore if deletion fails
             }

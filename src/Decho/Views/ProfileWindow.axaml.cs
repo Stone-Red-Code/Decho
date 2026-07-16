@@ -56,29 +56,38 @@ public sealed partial class ProfileWindow : Window
         Close();
     }
 
-    private static string FormatStatus(UserStatus status) => status switch
+    private static string FormatStatus(UserStatus status)
     {
-        UserStatus.Online => "Online",
-        UserStatus.Away => "Away",
-        UserStatus.DoNotDisturb => "Do Not Disturb",
-        UserStatus.Invisible => "Invisible",
-        _ => "Unknown",
-    };
+        return status switch
+        {
+            UserStatus.Online => "Online",
+            UserStatus.Away => "Away",
+            UserStatus.DoNotDisturb => "Do Not Disturb",
+            UserStatus.Invisible => "Invisible",
+            _ => "Unknown",
+        };
+    }
 
-    private static IBrush GetStatusBrush(UserStatus status) => status switch
+    private static IBrush GetStatusBrush(UserStatus status)
     {
-        UserStatus.Online => new SolidColorBrush(Colors.LimeGreen),
-        UserStatus.Away => new SolidColorBrush(Colors.Goldenrod),
-        UserStatus.DoNotDisturb => new SolidColorBrush(Colors.IndianRed),
-        UserStatus.Invisible => new SolidColorBrush(Colors.Gray),
-        _ => new SolidColorBrush(Colors.White),
-    };
+        return status switch
+        {
+            UserStatus.Online => new SolidColorBrush(Colors.LimeGreen),
+            UserStatus.Away => new SolidColorBrush(Colors.Goldenrod),
+            UserStatus.DoNotDisturb => new SolidColorBrush(Colors.IndianRed),
+            UserStatus.Invisible => new SolidColorBrush(Colors.Gray),
+            _ => new SolidColorBrush(Colors.White),
+        };
+    }
 
-    private static string FormatRole(ServerRole role) => role switch
+    private static string FormatRole(ServerRole role)
     {
-        ServerRole.Admin => "Admin",
-        ServerRole.Mod => "Mod",
-        ServerRole.Member => "Member",
-        _ => role.ToString(),
-    };
+        return role switch
+        {
+            ServerRole.Admin => "Admin",
+            ServerRole.Mod => "Mod",
+            ServerRole.Member => "Member",
+            _ => role.ToString(),
+        };
+    }
 }

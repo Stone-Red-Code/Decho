@@ -22,11 +22,17 @@ public sealed class MessageViewModel(MessageModel model) : ViewModelBase
             string? color = Model.Author.NicknameColor;
             if (string.IsNullOrEmpty(color))
             {
-                return null;
+                return Brushes.White;
             }
 
-            try { return new SolidColorBrush(Avalonia.Media.Color.Parse(color)); }
-            catch { return null; }
+            try 
+            { 
+                return new SolidColorBrush(Color.Parse(color));
+            }
+            catch
+            { 
+                return null;
+            }
         }
     }
 
@@ -44,7 +50,7 @@ public sealed class MessageViewModel(MessageModel model) : ViewModelBase
 
     public bool IsImage => Type == MessageType.Image;
 
-    public bool ShowContent => !IsImage && !IsFile;
+    public bool ShowContent => !string.IsNullOrEmpty(Content);
 
     public bool IsAudio => Type == MessageType.Audio;
 
