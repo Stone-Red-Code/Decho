@@ -7,7 +7,6 @@ namespace Decho.ViewModels;
 
 public sealed class UserViewModel(UserPresenceDto dto) : ViewModelBase
 {
-    private UserStatus _status = dto.Status;
     public string Username { get; } = dto.Username;
     public string DisplayName { get; } = dto.DisplayName ?? dto.Username;
     public string? NicknameColor { get; } = dto.NicknameColor;
@@ -16,20 +15,20 @@ public sealed class UserViewModel(UserPresenceDto dto) : ViewModelBase
 
     public UserStatus Status
     {
-        get => _status;
+        get;
         set
         {
-            if (_status == value)
+            if (field == value)
             {
                 return;
             }
 
-            _status = value;
+            field = value;
             this.RaisePropertyChanged();
             this.RaisePropertyChanged(nameof(StatusColor));
             this.RaisePropertyChanged(nameof(StatusText));
         }
-    }
+    } = dto.Status;
 
     public string FullName => DisplayName ?? Username;
 

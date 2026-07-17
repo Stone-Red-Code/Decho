@@ -59,9 +59,9 @@ public partial class MessageItemView : UserControl
 
         tb.Inlines?.Clear();
 
-        var mentionMatches = MentionRegex.Matches(content).Cast<Match>();
-        var channelMatches = ChannelRegex.Matches(content).Cast<Match>();
-        var allMatches = mentionMatches.Concat(channelMatches)
+        IEnumerable<Match> mentionMatches = MentionRegex.Matches(content).Cast<Match>();
+        IEnumerable<Match> channelMatches = ChannelRegex.Matches(content).Cast<Match>();
+        List<Match> allMatches = mentionMatches.Concat(channelMatches)
             .OrderBy(m => m.Index)
             .ToList();
 
@@ -74,11 +74,11 @@ public partial class MessageItemView : UserControl
             }
 
             bool isMention = match.Value[0] == '@';
-            var container = new InlineUIContainer
+            InlineUIContainer container = new InlineUIContainer
             {
                 BaselineAlignment = BaselineAlignment.Center,
             };
-            var label = new TextBlock
+            TextBlock label = new TextBlock
             {
                 Text = match.Value,
                 FontWeight = FontWeight.Bold,
