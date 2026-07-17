@@ -37,7 +37,9 @@
 							<Image Loaded="OnAttachmentImageLoaded"
 								   MaxHeight="300"
 								   MaxWidth="400"
-								   HorizontalAlignment="Left" />
+								   HorizontalAlignment="Left"
+								   Cursor="Hand"
+								   PointerPressed="OnAttachmentImagePointerPressed" />
 							<TextBlock Text="{Binding FileName}"
 									   FontSize="11"
 									   Opacity="0.7" />

@@ -797,7 +797,10 @@ public sealed class MainWindowViewModel : ViewModelBase
 
                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                 {
-                    serverVm.Channels.Add(channelVm);
+                    if (!serverVm.Channels.Any(c => c.Name == channel.Name))
+                    {
+                        serverVm.Channels.Add(channelVm);
+                    }
                     serverVm.SelectedChannel = channelVm;
 
                     foreach (MessageModel msg in joinResult.History)

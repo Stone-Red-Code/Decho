@@ -321,4 +321,61 @@ public partial class MessageItemView : UserControl
             // Ignore if temp file cannot be deleted
         }
     }
+
+    private async void OnAttachmentImagePointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+    {
+        if (sender is not Image image)
+        {
+            return;
+        }
+
+        if (image.DataContext is not AttachmentDto att)
+        {
+            return;
+        }
+
+        if (att.Kind != AttachmentKind.Image)
+        {
+            return;
+        }
+
+        if (DataContext is not MessageViewModel msg)
+        {
+            return;
+        }
+
+        if (msg.ImageCache.TryGetValue(att.Url, out Bitmap? cached))
+        {
+            ImageViewerWindow viewer = new ImageViewerWindow(cached, att.FileName);
+            if (TopLevel.GetTopLevel(this) is Window parent)
+            {
+                await viewer.ShowDialog(parent);
+            }
+            return;
+        }
+
+        MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
+        if (mainVm is null)
+        {
+            return;
+        }
+
+        byte[]? bytes = await mainVm.ConnectionService.DownloadImageBytesAsync(
+            msg.ServerUrl ?? "", msg.Model.ChannelName, att.Url);
+
+        if (bytes is null || bytes.Length == 0)
+        {
+            return;
+        }
+
+        using MemoryStream stream = new MemoryStream(bytes);
+        Bitmap bitmap = new Bitmap(stream);
+        msg.ImageCache[att.Url] = bitmap;
+
+        ImageViewerWindow viewerWindow = new ImageViewerWindow(bitmap, att.FileName);
+        if (TopLevel.GetTopLevel(this) is Window parentWindow)
+        {
+            await viewerWindow.ShowDialog(parentWindow);
+        }
+    }
 }
