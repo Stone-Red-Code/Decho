@@ -6,7 +6,7 @@
 			 x:Class="Decho.Views.SidebarView"
 			 x:DataType="vm:SidebarViewModel">
 	<Border Background="{DynamicResource UiTheme00}" Width="250" CornerRadius="0 6 0 0">
-		<ScrollViewer Padding="5">
+		<ScrollViewer Padding="5 5 5 -5">
 			<ItemsControl ItemsSource="{Binding Servers}">
 				<ItemsControl.ItemTemplate>
 					<DataTemplate x:DataType="vm:ServerViewModel">
