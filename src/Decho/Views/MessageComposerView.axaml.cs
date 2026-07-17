@@ -4,6 +4,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 
+using Decho.Models;
 using Decho.ViewModels;
 
 using System.Globalization;
@@ -134,15 +135,38 @@ public partial class MessageComposerView : UserControl
 
         IReadOnlyList<IStorageFile> files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            AllowMultiple = false,
-            Title = "Select a file to upload",
+            AllowMultiple = true,
+            Title = "Select files to attach",
         });
 
-        IStorageFile? file = files?.FirstOrDefault();
-        if (file?.TryGetLocalPath() is string path)
+        List<string> paths = [];
+        foreach (IStorageFile file in files)
         {
-            vm.RequestFileUpload(path);
+            if (file.TryGetLocalPath() is string path)
+            {
+                paths.Add(path);
+            }
         }
+
+        if (paths.Count > 0)
+        {
+            vm.StageFiles(paths);
+        }
+    }
+
+    private void OnRemoveStagedClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button button && button.DataContext is StagedFile file)
+        {
+            MessageComposerViewModel? vm = this.GetDataContext<MessageComposerViewModel>();
+            vm?.RemoveStagedFile(file);
+        }
+    }
+
+    private void OnClearStagedClick(object? sender, RoutedEventArgs e)
+    {
+        MessageComposerViewModel? vm = this.GetDataContext<MessageComposerViewModel>();
+        vm?.ClearStagedFiles();
     }
 
     private void OnDragOver(object? sender, DragEventArgs e)
@@ -164,14 +188,16 @@ public partial class MessageComposerView : UserControl
         }
 
 #pragma warning disable CS0618
-        string? paths = e.Data.GetFiles()?
+        List<string> paths = e.Data.GetFiles()?
             .Select(f => f.TryGetLocalPath())
-            .FirstOrDefault(p => p is not null);
+            .Where(p => p is not null)
+            .Cast<string>()
+            .ToList() ?? [];
 #pragma warning restore CS0618
 
-        if (paths is string path)
+        if (paths.Count > 0)
         {
-            vm.RequestFileUpload(path);
+            vm.StageFiles(paths);
         }
     }
 }

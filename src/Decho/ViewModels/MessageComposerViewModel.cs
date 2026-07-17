@@ -1,4 +1,7 @@
+using Decho.Models;
+
 using EchoHub.Client.Commands;
+using EchoHub.Core.Constants;
 
 using System.Collections.ObjectModel;
 using System.Reactive;
@@ -7,15 +10,23 @@ namespace Decho.ViewModels;
 
 public sealed class MessageComposerViewModel : ViewModelBase
 {
-    public event Action<string, string>? SendRequested;
+    public event Action<string, string, IReadOnlyList<string>>? SendRequested;
 
     public event Func<string, Task<string?>>? CommandRequested;
-
-    public event Action<string, string>? FileUploadRequested;
 
     private readonly ObservableCollection<UserViewModel> _onlineUsers = [];
     private readonly ObservableCollection<string> _channelNames = [];
     private CommandHandler? _commandHandler;
+
+    public ObservableCollection<StagedFile> StagedFiles { get; } = [];
+
+    public bool HasStagedFiles => StagedFiles.Count > 0;
+
+    public string StagedFilesSummary
+    {
+        get;
+        private set => this.RaiseAndSetIfChanged(ref field, value);
+    } = string.Empty;
 
     public string Draft
     {
@@ -51,7 +62,10 @@ public sealed class MessageComposerViewModel : ViewModelBase
 
         Autocomplete = new AutocompleteController([mentionProvider, channelProvider]);
 
-        IObservable<bool> canSend = this.WhenAnyValue(x => x.Draft, draft => !string.IsNullOrWhiteSpace(draft));
+        IObservable<bool> canSend = this.WhenAnyValue(
+            x => x.Draft,
+            x => x.HasStagedFiles,
+            (draft, hasFiles) => !string.IsNullOrWhiteSpace(draft) || hasFiles);
         SendCommand = ReactiveCommand.Create(Send, canSend);
 
         _ = this.WhenAnyValue(x => x.Draft).Subscribe(OnDraftChanged);
@@ -75,12 +89,38 @@ public sealed class MessageComposerViewModel : ViewModelBase
         }
     }
 
-    public void RequestFileUpload(string filePath)
+    public void StageFiles(IEnumerable<string> filePaths)
     {
-        if (!string.IsNullOrEmpty(ServerUrl))
+        int remaining = HubConstants.MaxAttachmentsPerMessage - StagedFiles.Count;
+        foreach (string path in filePaths)
         {
-            FileUploadRequested?.Invoke(ServerUrl, filePath);
+            if (remaining <= 0)
+            {
+                break;
+            }
+
+            if (StagedFiles.Any(f => f.FilePath == path))
+            {
+                continue;
+            }
+
+            StagedFiles.Add(new StagedFile(path, Path.GetFileName(path)));
+            remaining--;
         }
+
+        UpdateStagedSummary();
+    }
+
+    public void RemoveStagedFile(StagedFile file)
+    {
+        _ = StagedFiles.Remove(file);
+        UpdateStagedSummary();
+    }
+
+    public void ClearStagedFiles()
+    {
+        StagedFiles.Clear();
+        UpdateStagedSummary();
     }
 
     public void SetServer(string serverUrl, bool isConnected = true)
@@ -113,6 +153,14 @@ public sealed class MessageComposerViewModel : ViewModelBase
         Autocomplete.Reset();
     }
 
+    private void UpdateStagedSummary()
+    {
+        this.RaisePropertyChanged(nameof(HasStagedFiles));
+        StagedFilesSummary = StagedFiles.Count > 0
+            ? $"{StagedFiles.Count} file(s) staged"
+            : string.Empty;
+    }
+
     private void OnDraftChanged(string? draft)
     {
         Autocomplete.Update(draft ?? string.Empty);
@@ -121,20 +169,18 @@ public sealed class MessageComposerViewModel : ViewModelBase
     private void Send()
     {
         string text = Draft.Trim();
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return;
-        }
-
         Draft = string.Empty;
 
         if (_commandHandler is not null && _commandHandler.IsCommand(text))
         {
             _ = (CommandRequested?.Invoke(text));
+            return;
         }
-        else
-        {
-            SendRequested?.Invoke(ServerUrl, text);
-        }
+
+        List<string> filePaths = StagedFiles.Select(f => f.FilePath).ToList();
+        StagedFiles.Clear();
+        UpdateStagedSummary();
+
+        SendRequested?.Invoke(ServerUrl, text, filePaths);
     }
 }

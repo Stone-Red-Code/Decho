@@ -95,6 +95,57 @@ public sealed class ConnectionService : IDisposable
         await entry.Manager.SendMessageAsync(channelName, content);
     }
 
+    public async Task SendMessageWithAttachmentsAsync(string serverUrl, string channelName, string content, IReadOnlyList<string> filePaths, string? size = null)
+    {
+        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
+        {
+            throw new InvalidOperationException("Not connected to server");
+        }
+
+        entry.Manager.RoomKeys.TryGetKey(channelName, out byte[]? roomKey);
+        List<OutgoingAttachment> attachments = new List<OutgoingAttachment>(filePaths.Count);
+
+        foreach (string filePath in filePaths)
+        {
+            string fileName = Path.GetFileName(filePath);
+            OutgoingAttachment attachment;
+
+            if (roomKey is not null && roomKey.Length > 0)
+            {
+                byte[] bytes = await File.ReadAllBytesAsync(filePath);
+                string declaredKind;
+                string? preview = null;
+
+                await using (MemoryStream ms = new MemoryStream(bytes))
+                {
+                    if (FileValidationHelper.IsValidImage(ms))
+                    {
+                        declaredKind = "image";
+                        (int w, int h) = ImageToAsciiService.GetDimensions(size);
+                        ms.Position = 0;
+                        preview = RoomCrypto.EncryptText(new ImageToAsciiService().ConvertToAscii(ms, w, h), roomKey);
+                    }
+                    else
+                    {
+                        declaredKind = FileValidationHelper.IsAudioFile(fileName) ? "audio" : "file";
+                    }
+                }
+
+                byte[] encryptedBlob = RoomCrypto.EncryptBytes(bytes, roomKey);
+                attachment = new OutgoingAttachment(new MemoryStream(encryptedBlob), fileName, declaredKind, preview);
+            }
+            else
+            {
+                byte[] bytes = await File.ReadAllBytesAsync(filePath);
+                attachment = new OutgoingAttachment(new MemoryStream(bytes), fileName);
+            }
+
+            attachments.Add(attachment);
+        }
+
+        _ = await entry.ApiClient.SendMessageWithAttachmentsAsync(channelName, content, attachments, size);
+    }
+
     public async Task<ChannelDto?> CreateChannelAsync(string serverUrl, string name, string? topic, bool isPublic, string? password = null)
     {
         if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))

@@ -56,7 +56,6 @@ public sealed class MainWindowViewModel : ViewModelBase
 
         Chat.Composer.SendRequested += HandleSendRequested;
         Chat.Composer.CommandRequested += HandleCommandAsync;
-        Chat.Composer.FileUploadRequested += HandleFileUploadRequested;
         Chat.LoadMoreRequested += HandleLoadMoreRequested;
 
         WireCommandHandlerEvents();
@@ -707,10 +706,29 @@ public sealed class MainWindowViewModel : ViewModelBase
         return result.Message;
     }
 
-    private void HandleSendRequested(string serverUrl, string text)
+    private void HandleSendRequested(string serverUrl, string text, IReadOnlyList<string> filePaths)
     {
         if (string.IsNullOrEmpty(Chat.CurrentChannelName))
         {
+            return;
+        }
+
+        if (filePaths.Count > 0)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await ConnectionService.SendMessageWithAttachmentsAsync(serverUrl, Chat.CurrentChannelName, text, filePaths);
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                        StatusText = "Message sent");
+                }
+                catch (Exception ex)
+                {
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                        StatusText = $"Send failed: {ex.Message}");
+                }
+            });
             return;
         }
 
@@ -732,29 +750,6 @@ public sealed class MainWindowViewModel : ViewModelBase
                 {
                     StatusText = $"Send failed: {ex.Message}";
                 });
-            }
-        });
-    }
-
-    private void HandleFileUploadRequested(string serverUrl, string filePath)
-    {
-        if (string.IsNullOrEmpty(Chat.CurrentChannelName))
-        {
-            return;
-        }
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await ConnectionService.UploadFileAsync(serverUrl, Chat.CurrentChannelName, filePath, null);
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                    StatusText = "File uploaded");
-            }
-            catch (Exception ex)
-            {
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                    StatusText = $"Upload failed: {ex.Message}");
             }
         });
     }
