@@ -11,7 +11,7 @@
             <TextBlock FontWeight="Bold"
                        FontSize="13"
                        Margin="8 6"
-                       Text="{Binding OnlineUserCount, StringFormat='Online — {0}'}" />
+                       Text="{Binding OnlineUserCount, StringFormat='Users - {0}'}" />
             <ItemsControl ItemsSource="{Binding OnlineUsers}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:UserViewModel">

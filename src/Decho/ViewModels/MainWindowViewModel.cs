@@ -625,6 +625,18 @@ public sealed class MainWindowViewModel : ViewModelBase
                 StatusText = $"Error: {error}";
             });
         };
+
+        ConnectionService.ChannelAdded += (serverUrl, channel) =>
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                ServerViewModel? serverVm = Sidebar.GetServer(serverUrl);
+                if (serverVm is not null && serverVm.Channels.All(c => c.Name != channel.Name))
+                {
+                    serverVm.Channels.Add(new ChannelViewModel(channel));
+                }
+            });
+        };
     }
 
     private async Task RefreshOnlineUsersAsync(string serverUrl, string channelName)

@@ -778,7 +778,22 @@ public sealed class ConnectionService : IDisposable
         {
             ChannelModel? existing = entry.Server.Channels.FirstOrDefault(c =>
                 string.Equals(c.Name, channel.Name, StringComparison.OrdinalIgnoreCase));
-            _ = existing?.Topic = channel.Topic;
+            if (existing is not null)
+            {
+                _ = existing.Topic = channel.Topic;
+            }
+            else
+            {
+                var model = new ChannelModel(
+                    channel.Id.ToString(),
+                    channel.Name,
+                    [],
+                    channel.Topic,
+                    channel.IsPublic,
+                    channel.IsProtected);
+                entry.Server.Channels.Add(model);
+                ChannelAdded?.Invoke(entry.Server.ServerUrl, model);
+            }
         };
 
         conn.ForceDisconnected += reason =>
@@ -796,7 +811,7 @@ public sealed class ConnectionService : IDisposable
         conn.ConnectionStatusChanged += status =>
         {
             entry.Server.IsConnected = status == "Connected";
-            entry.Server.IsConnecting = status is "Connecting..." or "Authenticating...";
+            entry.Server.IsConnecting = status is "Connecting..." or "Authenticating..." or "Reconnecting...";
             ServerStateChanged?.Invoke(entry.Server);
         };
     }

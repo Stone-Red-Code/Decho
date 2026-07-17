@@ -100,6 +100,7 @@ public sealed class ServerViewModel : ViewModelBase
         {
             _ = this.RaiseAndSetIfChanged(ref _isConnecting, value);
             this.RaisePropertyChanged(nameof(ConnectionStatusText));
+            this.RaisePropertyChanged(nameof(ConnectionStatusColor));
             this.RaisePropertyChanged(nameof(ShowConnectionControls));
         }
     }
