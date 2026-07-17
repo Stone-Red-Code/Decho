@@ -14,16 +14,18 @@
         Background="{DynamicResource UiTheme03}">
     <Border Padding="8">
         <Grid RowDefinitions="*,Auto">
-        <Image x:Name="ImageView"
-               Stretch="Uniform"
-               HorizontalAlignment="Stretch"
-               VerticalAlignment="Stretch" />
-        <Button Grid.Row="1"
-                Content="Close"
-                HorizontalAlignment="Right"
-                Width="80"
-                Margin="0 8 0 0"
-                Click="OnCloseClick" />
+            <Image x:Name="ImageView"
+                   Stretch="Uniform"
+                   HorizontalAlignment="Stretch"
+                   VerticalAlignment="Stretch" />
+            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0 8 0 0" Spacing="8">
+                <Button x:Name="DownloadButton"
+                        Content="Download"
+                        Click="OnDownloadClick" />
+                <Button Content="Close"
+                        Width="80"
+                        Click="OnCloseClick" />
+            </StackPanel>
         </Grid>
     </Border>
 </Window>

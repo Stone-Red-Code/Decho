@@ -14,6 +14,7 @@ using EchoHub.Core.Models;
 
 using Romzetron.Avalonia;
 
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 
 namespace Decho.Views;
@@ -22,6 +23,7 @@ public partial class MessageItemView : UserControl
 {
     private static readonly Regex MentionRegex = new(@"@(\w+)", RegexOptions.Compiled);
     private static readonly Regex ChannelRegex = new(@"(?<!\w)#(\w+)", RegexOptions.Compiled);
+    private static readonly Regex UrlRegex = new(@"https?://[^\s]+", RegexOptions.Compiled);
     private CancellationTokenSource? _loadCts;
     private string? _loadedMessageId;
 
@@ -29,6 +31,18 @@ public partial class MessageItemView : UserControl
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
+    }
+
+    private static void OpenUrl(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch
+        {
+            // silently ignore
+        }
     }
 
     private void OnDataContextChanged(object? sender, EventArgs args)
@@ -49,6 +63,53 @@ public partial class MessageItemView : UserControl
         }
     }
 
+    private Window? GetParentWindow() => TopLevel.GetTopLevel(this) as Window;
+
+    private async Task<Bitmap?> GetOrDownloadImageAsync(MessageViewModel msg, AttachmentDto att)
+    {
+        if (msg.ImageCache.TryGetValue(att.Url, out Bitmap? cached))
+        {
+            return cached;
+        }
+
+        MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
+        if (mainVm is null)
+        {
+            return null;
+        }
+
+        byte[]? bytes = await mainVm.ConnectionService.DownloadImageBytesAsync(
+            msg.ServerUrl ?? "", msg.Model.ChannelName, att.Url);
+
+        if (bytes is null || bytes.Length == 0)
+        {
+            return null;
+        }
+
+        using MemoryStream stream = new MemoryStream(bytes);
+        Bitmap bitmap = new Bitmap(stream);
+        msg.ImageCache[att.Url] = bitmap;
+        return bitmap;
+    }
+
+    private async Task OpenProfileAsync(string username, string serverUrl)
+    {
+        MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
+        Window? parent = GetParentWindow();
+        if (mainVm is null || parent is null)
+        {
+            return;
+        }
+
+        UserProfileDto? profile = await mainVm.ConnectionService.GetUserProfileAsync(serverUrl, username);
+        if (profile is null)
+        {
+            return;
+        }
+
+        await new ProfileWindow(profile).ShowDialog(parent);
+    }
+
     private void BuildMessageInlines(string content)
     {
         TextBlock? tb = MessageContent;
@@ -61,7 +122,8 @@ public partial class MessageItemView : UserControl
 
         IEnumerable<Match> mentionMatches = MentionRegex.Matches(content).Cast<Match>();
         IEnumerable<Match> channelMatches = ChannelRegex.Matches(content).Cast<Match>();
-        List<Match> allMatches = mentionMatches.Concat(channelMatches)
+        IEnumerable<Match> urlMatches = UrlRegex.Matches(content).Cast<Match>();
+        List<Match> allMatches = mentionMatches.Concat(channelMatches).Concat(urlMatches)
             .OrderBy(m => m.Index)
             .ToList();
 
@@ -92,14 +154,22 @@ public partial class MessageItemView : UserControl
                 string username = match.Groups[1].Value;
                 label.Margin = new Thickness(0, 0, 0, -2);
                 label.Foreground = ColorPalette.Yellow05;
-                label.PointerPressed += (_, args) => OnMentionPointerPressed(username, args);
+                string serverUrl = ResolveServerUrl();
+                label.PointerPressed += (_, args) => _ = OpenProfileAsync(username, serverUrl);
             }
-            else
+            else if (match.Value[0] == '#')
             {
                 string channelName = match.Groups[1].Value;
                 label.Margin = new Thickness(0, 0, 0, -2);
                 label.Foreground = ColorPalette.Blue05;
                 label.PointerPressed += (_, args) => OnChannelPointerPressed(channelName, args);
+            }
+            else
+            {
+                string url = match.Value;
+                label.Foreground = ColorPalette.Blue05;
+                label.TextDecorations = TextDecorations.Underline;
+                label.PointerPressed += (_, args) => OpenUrl(url);
             }
 
             container.Child = label;
@@ -114,32 +184,17 @@ public partial class MessageItemView : UserControl
         }
     }
 
-    private async void OnMentionPointerPressed(string username, PointerPressedEventArgs e)
+    private string ResolveServerUrl()
     {
-        if (DataContext is not MessageViewModel msg)
+        if (DataContext is MessageViewModel msg)
         {
-            return;
+            MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
+            if (mainVm is not null)
+            {
+                return msg.ServerUrl ?? mainVm.Chat.CurrentServerUrl;
+            }
         }
-
-        MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
-        if (mainVm is null)
-        {
-            return;
-        }
-
-        string serverUrl = msg.ServerUrl ?? mainVm.Chat.CurrentServerUrl;
-        UserProfileDto? profile = await mainVm.ConnectionService.GetUserProfileAsync(serverUrl, username);
-        if (profile is null)
-        {
-            return;
-        }
-
-        ProfileWindow dialog = new ProfileWindow(profile);
-
-        if (TopLevel.GetTopLevel(this) is Window parent)
-        {
-            await dialog.ShowDialog(parent);
-        }
+        return string.Empty;
     }
 
     private void OnChannelPointerPressed(string channelName, PointerPressedEventArgs e)
@@ -194,40 +249,19 @@ public partial class MessageItemView : UserControl
             return;
         }
 
-        CancellationTokenSource? cts = _loadCts;
-        if (cts is null)
+        if (_loadCts is null)
         {
-            return;
-        }
-
-        if (msg.ImageCache.TryGetValue(att.Url, out Bitmap? cached))
-        {
-            image.Source = cached;
             return;
         }
 
         try
         {
-            MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
-            if (mainVm is null)
+            Bitmap? bitmap = await GetOrDownloadImageAsync(msg, att);
+            _loadCts.Token.ThrowIfCancellationRequested();
+            if (bitmap is not null)
             {
-                return;
+                image.Source = bitmap;
             }
-
-            byte[]? bytes = await mainVm.ConnectionService.DownloadImageBytesAsync(
-                msg.ServerUrl ?? "", msg.Model.ChannelName, att.Url);
-
-            cts.Token.ThrowIfCancellationRequested();
-            if (bytes is null || bytes.Length == 0)
-            {
-                return;
-            }
-
-            using MemoryStream stream = new MemoryStream(bytes);
-            Bitmap bitmap = new Bitmap(stream);
-            cts.Token.ThrowIfCancellationRequested();
-            msg.ImageCache[att.Url] = bitmap;
-            image.Source = bitmap;
         }
         catch
         {
@@ -237,32 +271,13 @@ public partial class MessageItemView : UserControl
 
     private async void OnAuthorNamePointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
     {
-        MessageViewModel? msg = this.GetDataContext<MessageViewModel>();
-        if (msg is null)
+        if (DataContext is not MessageViewModel msg)
         {
             return;
         }
 
-        MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
-        if (mainVm is null)
-        {
-            return;
-        }
-
-        string serverUrl = msg.ServerUrl ?? mainVm.Chat.CurrentServerUrl;
-        string username = msg.Model.Author.Id;
-        UserProfileDto? profile = await mainVm.ConnectionService.GetUserProfileAsync(serverUrl, username);
-        if (profile is null)
-        {
-            return;
-        }
-
-        ProfileWindow dialog = new ProfileWindow(profile);
-
-        if (TopLevel.GetTopLevel(this) is Window parent)
-        {
-            await dialog.ShowDialog(parent);
-        }
+        string serverUrl = ResolveServerUrl();
+        await OpenProfileAsync(msg.Model.Author.Id, serverUrl);
     }
 
     private async void OnAttachmentDownloadClicked(object? sender, RoutedEventArgs e)
@@ -344,38 +359,32 @@ public partial class MessageItemView : UserControl
             return;
         }
 
-        if (msg.ImageCache.TryGetValue(att.Url, out Bitmap? cached))
+        Bitmap? bitmap = await GetOrDownloadImageAsync(msg, att);
+        if (bitmap is null)
         {
-            ImageViewerWindow viewer = new ImageViewerWindow(cached, att.FileName);
-            if (TopLevel.GetTopLevel(this) is Window parent)
+            return;
+        }
+
+        Window? parent = GetParentWindow();
+        if (parent is null)
+        {
+            return;
+        }
+
+        string serverUrl = msg.ServerUrl ?? "";
+        string channelName = msg.Model.ChannelName;
+        Func<Task<string?>> downloadAsync = async () =>
+        {
+            MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
+            if (mainVm is null)
             {
-                await viewer.ShowDialog(parent);
+                return null;
             }
-            return;
-        }
+            return await mainVm.ConnectionService.DownloadAttachmentAsync(
+                serverUrl, channelName, att.Url, att.FileName);
+        };
 
-        MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
-        if (mainVm is null)
-        {
-            return;
-        }
-
-        byte[]? bytes = await mainVm.ConnectionService.DownloadImageBytesAsync(
-            msg.ServerUrl ?? "", msg.Model.ChannelName, att.Url);
-
-        if (bytes is null || bytes.Length == 0)
-        {
-            return;
-        }
-
-        using MemoryStream stream = new MemoryStream(bytes);
-        Bitmap bitmap = new Bitmap(stream);
-        msg.ImageCache[att.Url] = bitmap;
-
-        ImageViewerWindow viewerWindow = new ImageViewerWindow(bitmap, att.FileName);
-        if (TopLevel.GetTopLevel(this) is Window parentWindow)
-        {
-            await viewerWindow.ShowDialog(parentWindow);
-        }
+        ImageViewerWindow viewer = new ImageViewerWindow(bitmap, att.FileName, downloadAsync);
+        await viewer.ShowDialog(parent);
     }
 }
