@@ -111,4 +111,20 @@ public sealed class ChannelViewModel(ChannelModel model) : ViewModelBase
         Model.Messages.Add(message);
         Messages.Add(new MessageViewModel(message));
     }
+
+    public void InsertMessages(IList<MessageModel> olderMessages)
+    {
+        HashSet<string> existingIds = Messages.Select(m => m.Model.Id).ToHashSet();
+        List<MessageModel> fresh = olderMessages.Where(m => !existingIds.Contains(m.Id)).ToList();
+        if (fresh.Count == 0)
+        {
+            return;
+        }
+
+        foreach (MessageModel msg in fresh)
+        {
+            Model.Messages.Insert(0, msg);
+            Messages.Insert(0, new MessageViewModel(msg));
+        }
+    }
 }

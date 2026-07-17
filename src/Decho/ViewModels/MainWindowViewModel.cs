@@ -57,6 +57,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         Chat.Composer.SendRequested += HandleSendRequested;
         Chat.Composer.CommandRequested += HandleCommandAsync;
         Chat.Composer.FileUploadRequested += HandleFileUploadRequested;
+        Chat.LoadMoreRequested += HandleLoadMoreRequested;
 
         WireCommandHandlerEvents();
         WireConnectionServiceEvents();
@@ -876,6 +877,43 @@ public sealed class MainWindowViewModel : ViewModelBase
             IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard(
                 "Error", $"Could not delete channel:\n{ex.Message}", ButtonEnum.Ok);
             _ = await box.ShowWindowDialogAsync(_mainWindow);
+        }
+    }
+
+    private async void HandleLoadMoreRequested()
+    {
+        string serverUrl = Chat.CurrentServerUrl;
+        string channelName = Chat.CurrentChannelName;
+        if (string.IsNullOrEmpty(serverUrl) || string.IsNullOrEmpty(channelName))
+        {
+            return;
+        }
+
+        ChannelViewModel? channel = FindChannelViewModel(serverUrl, channelName);
+        if (channel is null)
+        {
+            return;
+        }
+
+        Chat.IsLoadingMore = true;
+
+        try
+        {
+            int offset = channel.Messages.Count;
+            List<MessageModel> older = await ConnectionService.GetHistoryAsync(serverUrl, channelName, HubConstants.DefaultHistoryCount, offset);
+
+            if (older.Count > 0)
+            {
+                channel.InsertMessages(older);
+            }
+        }
+        catch
+        {
+            // silently ignore
+        }
+        finally
+        {
+            Chat.IsLoadingMore = false;
         }
     }
 

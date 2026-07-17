@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
 
@@ -12,6 +13,8 @@ public partial class MessageListView : UserControl
     private ChatViewModel? _chat;
     private bool _hasPendingScroll;
     private bool _wasAtBottom;
+    private bool _loadingMore;
+    private double _loadingMoreExtent;
 
     public MessageListView()
     {
@@ -25,6 +28,7 @@ public partial class MessageListView : UserControl
         {
             _chat.Messages.CollectionChanged -= OnMessagesChanged;
             _chat.PropertyChanged -= OnViewModelPropertyChanged;
+            _chat.LoadMoreRequested -= OnLoadMoreRequested;
         }
 
         ScrollViewer? scroll = this.FindControl<ScrollViewer>("MessageScrollViewer");
@@ -35,8 +39,18 @@ public partial class MessageListView : UserControl
         {
             _chat.Messages.CollectionChanged += OnMessagesChanged;
             _chat.PropertyChanged += OnViewModelPropertyChanged;
+            _chat.LoadMoreRequested += OnLoadMoreRequested;
             scroll?.ScrollChanged += OnScrollChanged;
         }
+    }
+
+    private void OnLoadMoreRequested()
+    {
+        ScrollViewer? scroll = this.FindControl<ScrollViewer>("MessageScrollViewer");
+        if (scroll is null) return;
+
+        _loadingMore = true;
+        _loadingMoreExtent = scroll.Extent.Height;
     }
 
     private void OnScrollChanged(object? sender, ScrollChangedEventArgs e)
@@ -48,6 +62,14 @@ public partial class MessageListView : UserControl
         }
 
         ScrollViewer scrollViewer = (ScrollViewer)sender!;
+
+        if (!_loadingMore && _chat is not null && !_chat.IsLoadingMore
+            && scrollViewer.Offset.Y <= 0
+            && scrollViewer.Extent.Height > scrollViewer.Viewport.Height)
+        {
+            _chat.LoadMoreRequested?.Invoke();
+        }
+
         _wasAtBottom = scrollViewer.Offset.Y + scrollViewer.Viewport.Height >= scrollViewer.Extent.Height - 30;
     }
 
@@ -58,6 +80,10 @@ public partial class MessageListView : UserControl
             _chat!.Messages.CollectionChanged += OnMessagesChanged;
             ScrollToBottom();
         }
+        else if (e.PropertyName == nameof(ChatViewModel.IsLoadingMore) && !_chat!.IsLoadingMore && _loadingMore)
+        {
+            RestoreScrollPosition();
+        }
     }
 
     private void OnMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -66,6 +92,19 @@ public partial class MessageListView : UserControl
         {
             TryAutoScroll();
         }
+    }
+
+    private void RestoreScrollPosition()
+    {
+        ScrollViewer? scroll = this.FindControl<ScrollViewer>("MessageScrollViewer");
+        if (scroll is null) return;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            double delta = scroll.Extent.Height - _loadingMoreExtent;
+            scroll.Offset = new Vector(scroll.Offset.X, scroll.Offset.Y + delta);
+            _loadingMore = false;
+        }, DispatcherPriority.Background);
     }
 
     private void TryAutoScroll()

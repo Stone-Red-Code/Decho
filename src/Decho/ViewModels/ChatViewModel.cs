@@ -7,6 +7,8 @@ namespace Decho.ViewModels;
 
 public sealed class ChatViewModel : ViewModelBase
 {
+    public Action? LoadMoreRequested;
+
     public ObservableCollection<MessageViewModel> Messages
     {
         get;
@@ -56,6 +58,17 @@ public sealed class ChatViewModel : ViewModelBase
     public string CurrentServerUrl { get; private set; } = string.Empty;
 
     public string CurrentChannelName { get; private set; } = string.Empty;
+
+    public bool IsLoadingMore
+    {
+        get;
+        set
+        {
+            if (field == value) return;
+            field = value;
+            this.RaisePropertyChanged();
+        }
+    }
 
     public ChatViewModel()
     {
