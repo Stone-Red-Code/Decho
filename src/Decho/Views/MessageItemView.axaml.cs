@@ -22,7 +22,7 @@ namespace Decho.Views;
 public partial class MessageItemView : UserControl
 {
     private static readonly Regex MentionRegex = new(@"@(\w+)", RegexOptions.Compiled);
-    private static readonly Regex ChannelRegex = new(@"(?<!\w)#(\w+)", RegexOptions.Compiled);
+    private static readonly Regex ChannelRegex = new(@"(?<!\w)#([\w-]+)", RegexOptions.Compiled);
     private static readonly Regex UrlRegex = new(@"https?://[^\s]+", RegexOptions.Compiled);
     private CancellationTokenSource? _loadCts;
     private string? _loadedMessageId;
