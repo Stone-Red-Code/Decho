@@ -10,6 +10,7 @@ using EchoHub.Client.Services;
 using EchoHub.Core.Constants;
 using EchoHub.Core.DTOs;
 using EchoHub.Core.Models;
+using EchoHub.Core.Security;
 
 using MsBox.Avalonia;
 using MsBox.Avalonia.Base;
@@ -142,51 +143,55 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     private async Task<string?> ShowPromptWindowAsync(string title, string message, string buttonText = "OK", bool isPassword = true)
     {
-        Window window = new Avalonia.Controls.Window
-        {
-            Title = title,
-            Width = 400,
-            Height = 200,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-        };
-
-        TextBox inputBox = new Avalonia.Controls.TextBox { Watermark = isPassword ? "Password" : "Passphrase", PasswordChar = '*' };
         string? result = null;
-
-        Button okBtn = new Avalonia.Controls.Button { Content = buttonText, IsDefault = true };
-        Button cancelBtn = new Avalonia.Controls.Button { Content = "Cancel", IsCancel = true };
-
-        okBtn.Click += (_, _) =>
+        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
         {
-            result = inputBox.Text;
-            window.Close();
-        };
-        cancelBtn.Click += (_, _) => window.Close();
-
-        StackPanel buttons = new Avalonia.Controls.StackPanel
-        {
-            Orientation = Avalonia.Layout.Orientation.Horizontal,
-            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
-            Spacing = 8,
-            Children = { cancelBtn, okBtn },
-        };
-
-        StackPanel panel = new Avalonia.Controls.StackPanel
-        {
-            Margin = new Avalonia.Thickness(12),
-            Spacing = 8,
-            Children =
+            Window window = new Avalonia.Controls.Window
             {
-                new Avalonia.Controls.TextBlock { Text = message },
-                inputBox,
-                buttons,
-            },
-        };
+                Title = title,
+                Width = 400,
+                Height = 200,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                SizeToContent = SizeToContent.Height,
+                CanResize = false,
+            };
 
-        window.Content = panel;
-        await window.ShowDialog(_mainWindow!);
+            TextBox inputBox = new Avalonia.Controls.TextBox { Watermark = isPassword ? "Password" : "Passphrase", PasswordChar = '*' };
+
+            Button okBtn = new Avalonia.Controls.Button { Content = buttonText, IsDefault = true };
+            Button cancelBtn = new Avalonia.Controls.Button { Content = "Cancel", IsCancel = true };
+
+            okBtn.Click += (_, _) =>
+            {
+                result = inputBox.Text;
+                window.Close();
+            };
+            cancelBtn.Click += (_, _) => window.Close();
+
+            StackPanel buttons = new Avalonia.Controls.StackPanel
+            {
+                Orientation = Avalonia.Layout.Orientation.Horizontal,
+                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+                Spacing = 8,
+                Children = { cancelBtn, okBtn },
+            };
+
+            StackPanel panel = new Avalonia.Controls.StackPanel
+            {
+                Margin = new Avalonia.Thickness(12),
+                Spacing = 8,
+                Children =
+                {
+                    new Avalonia.Controls.TextBlock { Text = message },
+                    inputBox,
+                    buttons,
+                },
+            };
+
+            window.Content = panel;
+            await window.ShowDialog(_mainWindow!);
+        });
+
         return result;
     }
 
@@ -216,22 +221,52 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            ChannelJoinResult result = await ConnectionService.JoinChannelAsync(serverUrl, channelName, password);
-            EnsureChannelInList(serverUrl, channelName);
+            ChannelCryptoDto? crypto = await ConnectionService.GetChannelCryptoAsync(serverUrl, channelName);
+            bool isEncrypted = crypto is not null && crypto.IsEncrypted;
 
-            // Handle E2EE unlock if needed
-            if (result.IsEncrypted && result.EncryptionSalt is not null && result.WrappedRoomKey is not null)
+            string? wirePassword = password;
+
+            if (isEncrypted)
             {
-                string? passphrase = await ShowPromptWindowAsync("Unlock Channel", "Enter the passphrase to unlock messages:", "Unlock");
-                if (string.IsNullOrEmpty(passphrase))
+                ServerConnection entry = ConnectionService.Connections[serverUrl];
+                entry.Manager.RoomKeys.MarkChannelEncrypted(channelName, true);
+
+                if (!entry.Manager.RoomKeys.HasKey(channelName) && password is null)
                 {
-                    return;
+                    password = await ShowPromptWindowAsync("Unlock Channel", "Enter the passphrase to unlock messages:", "Unlock");
+                    if (string.IsNullOrEmpty(password))
+                    {
+                        return;
+                    }
                 }
 
-                ChannelJoinResult unlockResult = await ConnectionService.UnlockRoomKeyAsync(serverUrl, channelName, passphrase, result.EncryptionSalt, result.WrappedRoomKey);
-                if (unlockResult.History.Count > 0)
+                if (password is not null)
                 {
-                    result = unlockResult;
+                    byte[] salt = Convert.FromBase64String(crypto!.EncryptionSalt!);
+                    wirePassword = RoomCrypto.DeriveKeys(password, salt).AuthKeyHex;
+                }
+            }
+
+            ChannelJoinResult result = await ConnectionService.JoinChannelAsync(serverUrl, channelName, wirePassword);
+            EnsureChannelInList(serverUrl, channelName);
+
+            if (isEncrypted && !ConnectionService.Connections[serverUrl].Manager.RoomKeys.HasKey(channelName))
+            {
+                try
+                {
+                    ChannelJoinResult unlockResult = await ConnectionService.UnlockRoomKeyAsync(
+                        serverUrl, channelName, password, crypto!.EncryptionSalt!, result.WrappedRoomKey ?? "");
+                    if (unlockResult.History.Count > 0)
+                    {
+                        result = unlockResult;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard(
+                        "Decrypt Error", $"Decrypt failed: {ex.Message}", ButtonEnum.Ok);
+                    _ = await box.ShowWindowDialogAsync(_mainWindow);
+                    return;
                 }
             }
 
@@ -878,28 +913,57 @@ public sealed class MainWindowViewModel : ViewModelBase
                 {
                     try
                     {
-                        ChannelJoinResult joinResult = await ConnectionService.JoinChannelAsync(serverUrl, channel.Name, password);
+                        ChannelCryptoDto? crypto = await ConnectionService.GetChannelCryptoAsync(serverUrl, channel.Name);
+                        bool isEncrypted = crypto is not null && crypto.IsEncrypted;
 
-                        // Handle E2EE unlock if needed
-                        if (joinResult.IsEncrypted && joinResult.EncryptionSalt is not null && joinResult.WrappedRoomKey is not null)
+                        string? wirePassword = password;
+
+                        if (isEncrypted)
                         {
-                            string? passphrase = await ShowPromptWindowAsync($"Unlock Channel", "This channel is encrypted. Please enter the passphrase to unlock it:", "Unlock");
+                            ServerConnection entry = ConnectionService.Connections[serverUrl];
+                            entry.Manager.RoomKeys.MarkChannelEncrypted(channel.Name, true);
 
-                            if (string.IsNullOrEmpty(passphrase))
+                            if (!entry.Manager.RoomKeys.HasKey(channel.Name) && password is null)
                             {
-                                // User cancelled - leave channel locked
-                                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                string? passphrase = await ShowPromptWindowAsync("Unlock Channel", "Enter the passphrase to unlock messages:", "Unlock");
+                                if (string.IsNullOrEmpty(passphrase))
                                 {
-                                    channel.IsLocked = true;
-                                    Chat.Composer.IsConnected = false;
-                                });
-                                break;
+                                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                    {
+                                        channel.IsLocked = true;
+                                        Chat.Composer.IsConnected = false;
+                                    });
+                                    break;
+                                }
+                                password = passphrase;
                             }
 
-                            ChannelJoinResult unlockResult = await ConnectionService.UnlockRoomKeyAsync(serverUrl, channel.Name, passphrase, joinResult.EncryptionSalt, joinResult.WrappedRoomKey);
-                            if (unlockResult.History.Count > 0)
+                            if (password is not null)
                             {
-                                joinResult = unlockResult; // Use decrypted history
+                                byte[] salt = Convert.FromBase64String(crypto!.EncryptionSalt!);
+                                wirePassword = RoomCrypto.DeriveKeys(password, salt).AuthKeyHex;
+                            }
+                        }
+
+                        ChannelJoinResult joinResult = await ConnectionService.JoinChannelAsync(serverUrl, channel.Name, wirePassword);
+
+                        if (isEncrypted && !ConnectionService.Connections[serverUrl].Manager.RoomKeys.HasKey(channel.Name))
+                        {
+                            try
+                            {
+                                ChannelJoinResult unlockResult = await ConnectionService.UnlockRoomKeyAsync(
+                                    serverUrl, channel.Name, password, crypto!.EncryptionSalt!, joinResult.WrappedRoomKey ?? "");
+                                if (unlockResult.History.Count > 0)
+                                {
+                                    joinResult = unlockResult;
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                IMsBox<ButtonResult> errBox = MessageBoxManager.GetMessageBoxStandard(
+                                    "Decrypt Error", $"Decrypt failed: {ex.Message}", ButtonEnum.Ok);
+                                _ = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(
+                                    () => errBox.ShowWindowDialogAsync(_mainWindow));
                             }
                         }
 

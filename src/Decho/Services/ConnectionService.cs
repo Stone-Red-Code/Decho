@@ -141,14 +141,24 @@ public sealed class ConnectionService : IDisposable
         }
 
         RemoveFromLeftChannels(serverUrl, channelName);
+
+        // For E2EE channels where the key hasn't been stored yet, always do a real join
+        // to obtain the wrapped room key (TrackChannel returned false on re-selection,
+        // so the first branch above skipped the actual join).
+        bool encFlag = entry.Manager.RoomKeys.IsChannelEncrypted(channelName);
+        bool hasKeyFlag = entry.Manager.RoomKeys.HasKey(channelName);
+
+        if (encFlag && !hasKeyFlag)
+        {
+            JoinOutcome outcome = await entry.Manager.JoinChannelAsync(channelName, password);
+            List<MessageModel> history = outcome.History.Select(m => MessageModelFromDto(m, entry)).ToList();
+            return new ChannelJoinResult(history, true, outcome.EncryptionSalt, outcome.WrappedRoomKey);
+        }
+
         List<MessageDto> existing = await entry.Manager.GetHistoryAsync(channelName);
         List<MessageModel> hist = existing.Select(m => MessageModelFromDto(m, entry)).ToList();
 
-        // Check if we have the key for an already-tracked encrypted channel
-        bool enc = entry.Manager.RoomKeys.IsChannelEncrypted(channelName);
-        bool hasK = entry.Manager.RoomKeys.HasKey(channelName);
-
-        return new ChannelJoinResult(hist, enc && !hasK, null, null);
+        return new ChannelJoinResult(hist, encFlag && !hasKeyFlag, null, null);
     }
 
     public async Task<ChannelJoinResult> UnlockRoomKeyAsync(string serverUrl, string channelName, string passphrase, string encryptionSalt, string wrappedRoomKey)
@@ -163,8 +173,18 @@ public sealed class ConnectionService : IDisposable
             return new ChannelJoinResult([], false, null, null);
         }
 
+        if (string.IsNullOrEmpty(encryptionSalt))
+        {
+            throw new InvalidOperationException("Encryption salt not available for this channel");
+        }
+
+        if (string.IsNullOrEmpty(wrappedRoomKey))
+        {
+            throw new InvalidOperationException("Wrapped room key not available. Re-join the channel to obtain it.");
+        }
+
         byte[] salt = Convert.FromBase64String(encryptionSalt);
-        var derived = RoomCrypto.DeriveKeys(passphrase, salt);
+        RoomCrypto.DerivedKeys derived = RoomCrypto.DeriveKeys(passphrase, salt);
 
         if (!entry.Manager.RoomKeys.TryStoreFromEnvelope(channelName, wrappedRoomKey, derived.KeyEncryptionKey))
         {
@@ -247,6 +267,36 @@ public sealed class ConnectionService : IDisposable
 
         await entry.ApiClient.DeleteChannelAsync(channelName);
         entry.Manager.UntrackChannel(channelName);
+    }
+
+    public async Task<List<ChannelDto>> GetChannelsAsync(string serverUrl)
+    {
+        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
+        {
+            return [];
+        }
+
+        return await entry.ApiClient.GetChannelsAsync();
+    }
+
+    public async Task<ChannelCryptoDto?> GetChannelCryptoAsync(string serverUrl, string channelName)
+    {
+        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
+        {
+            return null;
+        }
+
+        return await entry.ApiClient.GetChannelCryptoAsync(channelName);
+    }
+
+    public void MarkChannelEncrypted(string serverUrl, string channelName, bool isEncrypted)
+    {
+        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
+        {
+            return;
+        }
+
+        entry.Manager.RoomKeys.MarkChannelEncrypted(channelName, isEncrypted);
     }
 
     public async Task KickUserAsync(string serverUrl, string username, string? reason)
@@ -377,12 +427,12 @@ public sealed class ConnectionService : IDisposable
             string declaredKind;
             string? preview = null;
 
-            await using (var ms = new MemoryStream(bytes))
+            await using (MemoryStream ms = new MemoryStream(bytes))
             {
                 if (FileValidationHelper.IsValidImage(ms))
                 {
                     declaredKind = "image";
-                    var (w, h) = ImageToAsciiService.GetDimensions(size);
+                    (int w, int h) = ImageToAsciiService.GetDimensions(size);
                     ms.Position = 0;
                     preview = RoomCrypto.EncryptText(new ImageToAsciiService().ConvertToAscii(ms, w, h), roomKey);
                 }
@@ -784,7 +834,7 @@ public sealed class ConnectionService : IDisposable
             }
             else
             {
-                var model = new ChannelModel(
+                ChannelModel model = new ChannelModel(
                     channel.Id.ToString(),
                     channel.Name,
                     [],
