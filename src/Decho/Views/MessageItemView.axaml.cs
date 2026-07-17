@@ -79,7 +79,7 @@ public partial class MessageItemView : UserControl
         }
 
         byte[]? bytes = await mainVm.ConnectionService.DownloadImageBytesAsync(
-            msg.ServerUrl ?? "", msg.Model.ChannelName, att.Url);
+            ResolveServerUrl(), msg.Model.ChannelName, att.Url);
 
         if (bytes is null || bytes.Length == 0)
         {
@@ -189,11 +189,9 @@ public partial class MessageItemView : UserControl
         if (DataContext is MessageViewModel msg)
         {
             MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
-            if (mainVm is not null)
-            {
-                return msg.ServerUrl ?? mainVm.Chat.CurrentServerUrl;
-            }
+            return msg.ServerUrl ?? mainVm?.Chat.CurrentServerUrl ?? string.Empty;
         }
+
         return string.Empty;
     }
 
@@ -210,7 +208,7 @@ public partial class MessageItemView : UserControl
             return;
         }
 
-        string serverUrl = msg.ServerUrl ?? mainVm.Chat.CurrentServerUrl;
+        string serverUrl = ResolveServerUrl();
         ServerViewModel? serverVm = mainVm.Sidebar.GetServer(serverUrl);
         if (serverVm is null)
         {
@@ -371,7 +369,7 @@ public partial class MessageItemView : UserControl
             return;
         }
 
-        string serverUrl = msg.ServerUrl ?? "";
+        string serverUrl = ResolveServerUrl();
         string channelName = msg.Model.ChannelName;
         Func<Task<string?>> downloadAsync = async () =>
         {
