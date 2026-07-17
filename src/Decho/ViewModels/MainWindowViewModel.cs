@@ -140,27 +140,27 @@ public sealed class MainWindowViewModel : ViewModelBase
         return await dialog.ShowDialog<ConnectDialogResult?>(_mainWindow);
     }
 
-    private async Task<string?> ShowPasswordPromptWindowAsync()
+    private async Task<string?> ShowPromptWindowAsync(string title, string message, string buttonText = "OK", bool isPassword = true)
     {
         Window window = new Avalonia.Controls.Window
         {
-            Title = "Channel Password",
-            Width = 320,
-            Height = 180,
+            Title = title,
+            Width = 400,
+            Height = 200,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             SizeToContent = SizeToContent.Height,
             CanResize = false,
         };
 
-        TextBox passwordBox = new Avalonia.Controls.TextBox { Watermark = "Password", PasswordChar = '*' };
+        TextBox inputBox = new Avalonia.Controls.TextBox { Watermark = isPassword ? "Password" : "Passphrase", PasswordChar = '*' };
         string? result = null;
 
-        Button joinBtn = new Avalonia.Controls.Button { Content = "Join", IsDefault = true };
+        Button okBtn = new Avalonia.Controls.Button { Content = buttonText, IsDefault = true };
         Button cancelBtn = new Avalonia.Controls.Button { Content = "Cancel", IsCancel = true };
 
-        joinBtn.Click += (_, _) =>
+        okBtn.Click += (_, _) =>
         {
-            result = passwordBox.Text;
+            result = inputBox.Text;
             window.Close();
         };
         cancelBtn.Click += (_, _) => window.Close();
@@ -170,7 +170,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             Orientation = Avalonia.Layout.Orientation.Horizontal,
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
             Spacing = 8,
-            Children = { cancelBtn, joinBtn },
+            Children = { cancelBtn, okBtn },
         };
 
         StackPanel panel = new Avalonia.Controls.StackPanel
@@ -179,9 +179,8 @@ public sealed class MainWindowViewModel : ViewModelBase
             Spacing = 8,
             Children =
             {
-                new Avalonia.Controls.TextBlock { Text = "This channel is password protected." },
-                new Avalonia.Controls.TextBlock { Text = "Enter the channel password:" },
-                passwordBox,
+                new Avalonia.Controls.TextBlock { Text = message },
+                inputBox,
                 buttons,
             },
         };
@@ -217,8 +216,25 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            List<MessageModel> channel = await ConnectionService.JoinChannelAsync(serverUrl, channelName, password);
+            ChannelJoinResult result = await ConnectionService.JoinChannelAsync(serverUrl, channelName, password);
             EnsureChannelInList(serverUrl, channelName);
+
+            // Handle E2EE unlock if needed
+            if (result.IsEncrypted && result.EncryptionSalt is not null && result.WrappedRoomKey is not null)
+            {
+                string? passphrase = await ShowPromptWindowAsync("Unlock Channel", "Enter the passphrase to unlock messages:", "Unlock");
+                if (string.IsNullOrEmpty(passphrase))
+                {
+                    return;
+                }
+
+                ChannelJoinResult unlockResult = await ConnectionService.UnlockRoomKeyAsync(serverUrl, channelName, passphrase, result.EncryptionSalt, result.WrappedRoomKey);
+                if (unlockResult.History.Count > 0)
+                {
+                    result = unlockResult;
+                }
+            }
+
             ChannelModel? channelModel = FindChannel(serverUrl, channelName);
             if (channelModel is not null)
             {
@@ -226,7 +242,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                     .FirstOrDefault(c => c.Name == channelName);
                 if (channelVm is not null)
                 {
-                    foreach (MessageModel msg in channel)
+                    foreach (MessageModel msg in result.History)
                     {
                         channelVm.AddMessage(msg);
                     }
@@ -722,7 +738,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            List<MessageModel> history = await ConnectionService.JoinChannelAsync(server.ServerUrl, channel.Name);
+            ChannelJoinResult joinResult = await ConnectionService.JoinChannelAsync(server.ServerUrl, channel.Name);
 
             ChannelModel channelModel = new ChannelModel(
                 channel.Id.ToString(), channel.Name, [], channel.Topic, channel.IsPublic, channel.IsProtected);
@@ -737,7 +753,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                     serverVm.Channels.Add(channelVm);
                     serverVm.SelectedChannel = channelVm;
 
-                    foreach (MessageModel msg in history)
+                    foreach (MessageModel msg in joinResult.History)
                     {
                         channelVm.AddMessage(msg);
                     }
@@ -850,7 +866,30 @@ public sealed class MainWindowViewModel : ViewModelBase
                 {
                     try
                     {
-                        List<MessageModel> history = await ConnectionService.JoinChannelAsync(serverUrl, channel.Name, password);
+                        ChannelJoinResult joinResult = await ConnectionService.JoinChannelAsync(serverUrl, channel.Name, password);
+
+                        // Handle E2EE unlock if needed
+                        if (joinResult.IsEncrypted && joinResult.EncryptionSalt is not null && joinResult.WrappedRoomKey is not null)
+                        {
+                            string? passphrase = await ShowPromptWindowAsync($"Unlock Channel", "This channel is encrypted. Please enter the passphrase to unlock it:", "Unlock");
+
+                            if (string.IsNullOrEmpty(passphrase))
+                            {
+                                // User cancelled - leave channel locked
+                                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                {
+                                    channel.IsLocked = true;
+                                    Chat.Composer.IsConnected = false;
+                                });
+                                break;
+                            }
+
+                            ChannelJoinResult unlockResult = await ConnectionService.UnlockRoomKeyAsync(serverUrl, channel.Name, passphrase, joinResult.EncryptionSalt, joinResult.WrappedRoomKey);
+                            if (unlockResult.History.Count > 0)
+                            {
+                                joinResult = unlockResult; // Use decrypted history
+                            }
+                        }
 
                         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                         {
@@ -859,7 +898,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
                             if (channel.Messages.Count == 0)
                             {
-                                foreach (MessageModel msg in history)
+                                foreach (MessageModel msg in joinResult.History)
                                 {
                                     channel.AddMessage(msg);
                                 }
@@ -878,7 +917,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                                 return null;
                             }
 
-                            return await ShowPasswordPromptWindowAsync();
+                            return await ShowPromptWindowAsync("Channel Password", "This channel is password protected.\nEnter the channel password:", "Join");
                         });
 
                         if (string.IsNullOrEmpty(pwd))

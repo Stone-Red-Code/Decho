@@ -13,6 +13,25 @@ using System.Collections.ObjectModel;
 
 namespace Decho.Services;
 
+/// <summary>
+/// Result of joining a channel, including E2EE encryption metadata if the channel is encrypted.
+/// </summary>
+public sealed class ChannelJoinResult
+{
+    public List<MessageModel> History { get; }
+    public bool IsEncrypted { get; }
+    public string? EncryptionSalt { get; }
+    public string? WrappedRoomKey { get; }
+
+    public ChannelJoinResult(List<MessageModel> history, bool isEncrypted = false, string? encryptionSalt = null, string? wrappedRoomKey = null)
+    {
+        History = history;
+        IsEncrypted = isEncrypted;
+        EncryptionSalt = encryptionSalt;
+        WrappedRoomKey = wrappedRoomKey;
+    }
+}
+
 public sealed class ConnectionService : IDisposable
 {
     public event Action<ServerModel>? ServerAdded;
@@ -101,7 +120,7 @@ public sealed class ConnectionService : IDisposable
         return channel;
     }
 
-    public async Task<List<MessageModel>> JoinChannelAsync(string serverUrl, string channelName, string? password = null)
+    public async Task<ChannelJoinResult> JoinChannelAsync(string serverUrl, string channelName, string? password = null)
     {
         if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
         {
@@ -112,12 +131,49 @@ public sealed class ConnectionService : IDisposable
         {
             JoinOutcome outcome = await entry.Manager.JoinChannelAsync(channelName, password);
             RemoveFromLeftChannels(serverUrl, channelName);
-            return outcome.History.Select(m => MessageModelFromDto(m, entry)).ToList();
+
+            List<MessageModel> history = outcome.History.Select(m => MessageModelFromDto(m, entry)).ToList();
+
+            bool isEncrypted = !string.IsNullOrEmpty(outcome.EncryptionSalt) && !string.IsNullOrEmpty(outcome.WrappedRoomKey);
+            bool hasKey = entry.Manager.RoomKeys.HasKey(channelName);
+
+            return new ChannelJoinResult(history, isEncrypted && !hasKey, outcome.EncryptionSalt, outcome.WrappedRoomKey);
         }
 
         RemoveFromLeftChannels(serverUrl, channelName);
         List<MessageDto> existing = await entry.Manager.GetHistoryAsync(channelName);
-        return existing.Select(m => MessageModelFromDto(m, entry)).ToList();
+        List<MessageModel> hist = existing.Select(m => MessageModelFromDto(m, entry)).ToList();
+
+        // Check if we have the key for an already-tracked encrypted channel
+        bool enc = entry.Manager.RoomKeys.IsChannelEncrypted(channelName);
+        bool hasK = entry.Manager.RoomKeys.HasKey(channelName);
+
+        return new ChannelJoinResult(hist, enc && !hasK, null, null);
+    }
+
+    public async Task<ChannelJoinResult> UnlockRoomKeyAsync(string serverUrl, string channelName, string passphrase, string encryptionSalt, string wrappedRoomKey)
+    {
+        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
+        {
+            throw new InvalidOperationException("Not connected to server");
+        }
+
+        if (!entry.Manager.RoomKeys.IsChannelEncrypted(channelName))
+        {
+            return new ChannelJoinResult([], false, null, null);
+        }
+
+        byte[] salt = Convert.FromBase64String(encryptionSalt);
+        var derived = RoomCrypto.DeriveKeys(passphrase, salt);
+
+        if (!entry.Manager.RoomKeys.TryStoreFromEnvelope(channelName, wrappedRoomKey, derived.KeyEncryptionKey))
+        {
+            throw new InvalidOperationException("Wrong passphrase");
+        }
+
+        // Fetch fresh history now that the key is available
+        List<MessageDto> history = await entry.Manager.GetHistoryAsync(channelName);
+        return new ChannelJoinResult(history.Select(m => MessageModelFromDto(m, entry)).ToList(), false, null, null);
     }
 
     public async Task LeaveChannelAsync(string serverUrl, string channelName)
