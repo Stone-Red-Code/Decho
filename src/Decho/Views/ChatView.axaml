@@ -5,7 +5,7 @@
 			 xmlns:i="https://github.com/projektanker/icons.avalonia"
 			 x:Class="Decho.Views.ChatView"
 			 x:DataType="vm:ChatViewModel">
-	<Grid RowDefinitions="Auto, Auto, *, Auto" Margin="10">
+	<Grid RowDefinitions="Auto, Auto, *, 5, Auto" Margin="10">
 		<Grid ColumnDefinitions="*, Auto">
 			<StackPanel Orientation="Horizontal">
 				<TextBlock FontWeight="Bold"
@@ -28,7 +28,7 @@
 					Classes="IconButton" />
 		</Grid>
 		<views:MessageListView Grid.Row="2" />
-		<views:MessageComposerView Grid.Row="3"
+		<views:MessageComposerView Grid.Row="4"
 								   DataContext="{Binding Composer}" />
 	</Grid>
 </UserControl>
