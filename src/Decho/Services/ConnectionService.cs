@@ -32,14 +32,23 @@ public sealed class ChannelJoinResult
 public sealed class ConnectionService : IConnectionService
 {
     public event Action<ServerModel>? ServerAdded;
+
     public event Action<string>? ServerRemoved;
+
     public event Action<ServerModel>? ServerStateChanged;
+
     public event Action<string, ChannelModel>? ChannelAdded;
+
     public event Action<string, string>? ChannelRemoved;
+
     public event Action<string, MessageModel>? MessageReceived;
+
     public event Action<string, string, string?>? UserJoined;
+
     public event Action<string, string>? UserLeft;
+
     public event Action<string, string>? ErrorOccurred;
+
     public event Action<string, string>? ChannelDeleted;
 
     private readonly Dictionary<string, ServerConnection> _connections = new(StringComparer.OrdinalIgnoreCase);

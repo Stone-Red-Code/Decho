@@ -86,7 +86,8 @@ public sealed class MessageComposerViewModel : ViewModelBase
         IObservable<bool> canSend = this.WhenAnyValue(
             x => x.Draft,
             x => x.HasStagedFiles,
-            (draft, hasFiles) => !string.IsNullOrWhiteSpace(draft) || hasFiles);
+            (draft, hasFiles) =>
+            !string.IsNullOrWhiteSpace(draft) || hasFiles);
         SendCommand = ReactiveCommand.Create(Send, canSend);
 
         _ = this.WhenAnyValue(x => x.Draft).Subscribe(OnDraftChanged);
@@ -179,20 +180,7 @@ public sealed class MessageComposerViewModel : ViewModelBase
         ReplyTarget = null;
     }
 
-    private void UpdateStagedSummary()
-    {
-        this.RaisePropertyChanged(nameof(HasStagedFiles));
-        StagedFilesSummary = StagedFiles.Count > 0
-            ? $"{StagedFiles.Count} file(s) staged"
-            : string.Empty;
-    }
-
-    private void OnDraftChanged(string? draft)
-    {
-        Autocomplete.Update(draft ?? string.Empty);
-    }
-
-    private void Send()
+    internal void Send()
     {
         string text = Draft.Trim();
         Draft = string.Empty;
@@ -211,5 +199,18 @@ public sealed class MessageComposerViewModel : ViewModelBase
         ClearReplyTarget();
 
         SendRequested?.Invoke(ServerUrl, text, filePaths, replyToId);
+    }
+
+    private void UpdateStagedSummary()
+    {
+        this.RaisePropertyChanged(nameof(HasStagedFiles));
+        StagedFilesSummary = StagedFiles.Count > 0
+            ? $"{StagedFiles.Count} file(s) staged"
+            : string.Empty;
+    }
+
+    private void OnDraftChanged(string? draft)
+    {
+        Autocomplete.Update(draft ?? string.Empty);
     }
 }
