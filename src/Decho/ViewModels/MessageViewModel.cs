@@ -36,6 +36,16 @@ public sealed class MessageViewModel(MessageModel model) : ViewModelBase
 
     public string Content => Model.Content;
 
+    public bool IsAction => Model.Content.StartsWith("/me ", StringComparison.Ordinal);
+
+    public string ActionText => IsAction ? Model.Content[4..] : Model.Content;
+
+    public string DisplayContent => IsAction ? $"* {AuthorName} {ActionText}" : Model.Content;
+
+    public ReplyRefDto? ReplyTo => Model.ReplyTo;
+
+    public bool HasReply => ReplyTo is not null;
+
     public string? ServerUrl => Model.ServerUrl;
 
     public Dictionary<string, Bitmap> ImageCache { get; } = [];

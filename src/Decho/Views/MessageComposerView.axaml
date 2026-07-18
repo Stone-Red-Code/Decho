@@ -5,7 +5,7 @@
              xmlns:i="https://github.com/projektanker/icons.avalonia"
              x:Class="Decho.Views.MessageComposerView"
              x:DataType="vm:MessageComposerViewModel">
-    <Grid RowDefinitions="Auto,*">
+    <Grid RowDefinitions="Auto,Auto,*">
         <Border IsVisible="{Binding HasStagedFiles}"
                 Background="{DynamicResource UiTheme02}"
                 CornerRadius="4"
@@ -48,7 +48,26 @@
                 </ItemsControl>
             </DockPanel>
         </Border>
-        <Grid Grid.Row="1">
+        <Border Grid.Row="1"
+                IsVisible="{Binding HasReplyTarget}"
+                Background="{DynamicResource UiTheme02}"
+                CornerRadius="4"
+                Padding="6"
+                Margin="0 0 0 4">
+            <DockPanel>
+                <Button DockPanel.Dock="Right"
+                        Content="x"
+                        FontSize="11"
+                        Padding="4 0"
+                        Cursor="Hand"
+                        Click="OnCancelReplyClick" />
+                <TextBlock VerticalAlignment="Center"
+                           FontSize="12"
+                           Opacity="0.6"
+                           Text="{Binding ReplySummary}" />
+            </DockPanel>
+        </Border>
+        <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />

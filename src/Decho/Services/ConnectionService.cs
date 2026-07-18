@@ -52,6 +52,8 @@ public sealed class ConnectionService : IDisposable
 
     public event Action<string, string>? ErrorOccurred;
 
+    public event Action<string, string>? ChannelDeleted;
+
     private readonly Dictionary<string, ServerConnection> _connections = new(StringComparer.OrdinalIgnoreCase);
     internal IReadOnlyDictionary<string, ServerConnection> Connections => _connections;
 
@@ -85,14 +87,14 @@ public sealed class ConnectionService : IDisposable
         ServerRemoved?.Invoke(serverUrl);
     }
 
-    public async Task SendMessageAsync(string serverUrl, string channelName, string content)
+    public async Task SendMessageAsync(string serverUrl, string channelName, string content, Guid? replyToMessageId = null)
     {
         if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
         {
             throw new InvalidOperationException("Not connected to server");
         }
 
-        await entry.Manager.SendMessageAsync(channelName, content);
+        await entry.Manager.SendMessageAsync(channelName, content, replyToMessageId);
     }
 
     public async Task SendMessageWithAttachmentsAsync(string serverUrl, string channelName, string content, IReadOnlyList<string> filePaths, string? size = null)
@@ -338,6 +340,58 @@ public sealed class ConnectionService : IDisposable
         }
 
         return await entry.ApiClient.GetChannelCryptoAsync(channelName);
+    }
+
+    // ── Invites / Account ────────────────────────────────────────────────
+
+    public async Task<InviteDto?> CreateInviteAsync(string serverUrl, int? maxUses, int? expiresInHours)
+    {
+        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
+        {
+            return null;
+        }
+
+        return await entry.ApiClient.CreateInviteAsync(maxUses, expiresInHours);
+    }
+
+    public async Task<List<InviteDto>> GetInvitesAsync(string serverUrl)
+    {
+        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
+        {
+            return [];
+        }
+
+        return await entry.ApiClient.GetInvitesAsync();
+    }
+
+    public async Task RevokeInviteAsync(string serverUrl, string code)
+    {
+        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
+        {
+            return;
+        }
+
+        await entry.ApiClient.RevokeInviteAsync(code);
+    }
+
+    public async Task<string> ExportMyDataAsync(string serverUrl)
+    {
+        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
+        {
+            throw new InvalidOperationException("Not connected");
+        }
+
+        return await entry.ApiClient.ExportMyDataAsync();
+    }
+
+    public async Task DeleteMyAccountAsync(string serverUrl, string password)
+    {
+        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
+        {
+            throw new InvalidOperationException("Not connected");
+        }
+
+        await entry.ApiClient.DeleteMyAccountAsync(password);
     }
 
     public void MarkChannelEncrypted(string serverUrl, string channelName, bool isEncrypted)
@@ -664,7 +718,7 @@ public sealed class ConnectionService : IDisposable
     {
         UserModel author = new UserModel(
             dto.SenderUsername,
-            dto.SenderUsername,
+            dto.SenderDisplayName ?? dto.SenderUsername,
             dto.SenderNicknameColor);
 
         List<AttachmentDto> attachments = dto.Attachments ?? [];
@@ -676,7 +730,8 @@ public sealed class ConnectionService : IDisposable
             dto.Content,
             dto.ChannelName,
             entry.Server.ServerUrl,
-            attachments);
+            attachments,
+            dto.ReplyTo);
     }
 
     internal ServerConnection? GetConnection(string serverUrl)
@@ -873,6 +928,11 @@ public sealed class ConnectionService : IDisposable
         {
             entry.User.Status = presence.Status;
             entry.User.StatusMessage = presence.StatusMessage;
+        };
+
+        conn.ChannelDeleted += channelName =>
+        {
+            ChannelDeleted?.Invoke(entry.Server.ServerUrl, channelName);
         };
 
         conn.ChannelUpdated += channel =>

@@ -10,7 +10,7 @@ namespace Decho.ViewModels;
 
 public sealed class MessageComposerViewModel : ViewModelBase
 {
-    public event Action<string, string, IReadOnlyList<string>>? SendRequested;
+    public event Action<string, string, IReadOnlyList<string>, Guid?>? SendRequested;
 
     public event Func<string, Task<string?>>? CommandRequested;
 
@@ -47,6 +47,27 @@ public sealed class MessageComposerViewModel : ViewModelBase
     public bool HasCommandHandler => _commandHandler is not null;
 
     public AutocompleteController Autocomplete { get; }
+
+    public MessageViewModel? ReplyTarget
+    {
+        get => field;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref field, value);
+            this.RaisePropertyChanged(nameof(HasReplyTarget));
+            ReplySummary = value is not null
+                ? $"\u21A9 Replying to {value.AuthorName}: {value.Content[..Math.Min(value.Content.Length, 80)]}"
+                : string.Empty;
+        }
+    }
+
+    public bool HasReplyTarget => ReplyTarget is not null;
+
+    public string ReplySummary
+    {
+        get;
+        private set => this.RaiseAndSetIfChanged(ref field, value);
+    } = string.Empty;
 
     public MessageComposerViewModel()
     {
@@ -153,6 +174,11 @@ public sealed class MessageComposerViewModel : ViewModelBase
         Autocomplete.Reset();
     }
 
+    public void ClearReplyTarget()
+    {
+        ReplyTarget = null;
+    }
+
     private void UpdateStagedSummary()
     {
         this.RaisePropertyChanged(nameof(HasStagedFiles));
@@ -181,6 +207,9 @@ public sealed class MessageComposerViewModel : ViewModelBase
         StagedFiles.Clear();
         UpdateStagedSummary();
 
-        SendRequested?.Invoke(ServerUrl, text, filePaths);
+        Guid? replyToId = ReplyTarget is not null && Guid.TryParse(ReplyTarget.Model.Id, out Guid rid) ? rid : null;
+        ClearReplyTarget();
+
+        SendRequested?.Invoke(ServerUrl, text, filePaths, replyToId);
     }
 }

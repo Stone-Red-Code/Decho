@@ -169,6 +169,12 @@ public partial class MessageComposerView : UserControl
         vm?.ClearStagedFiles();
     }
 
+    private void OnCancelReplyClick(object? sender, RoutedEventArgs e)
+    {
+        MessageComposerViewModel? vm = this.GetDataContext<MessageComposerViewModel>();
+        vm?.ClearReplyTarget();
+    }
+
     private void OnDragOver(object? sender, DragEventArgs e)
     {
 #pragma warning disable CS0618

@@ -11,11 +11,13 @@ using EchoHub.Core.Constants;
 using EchoHub.Core.DTOs;
 using EchoHub.Core.Models;
 using EchoHub.Core.Security;
+using EchoHub.Core.Services;
 
 using MsBox.Avalonia;
 using MsBox.Avalonia.Base;
 using MsBox.Avalonia.Enums;
 
+using System.Diagnostics;
 using System.Reactive;
 using System.Reactive.Linq;
 
@@ -32,12 +34,6 @@ public sealed class MainWindowViewModel : ViewModelBase
     public SidebarViewModel Sidebar { get; }
 
     public ChatViewModel Chat { get; }
-
-    public string StatusText
-    {
-        get;
-        set => this.RaiseAndSetIfChanged(ref field, value);
-    } = "Ready";
 
     public ConnectionService ConnectionService { get; }
 
@@ -101,8 +97,6 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     private async Task ConnectAndSaveAsync(ConnectDialogResult result)
     {
-        StatusText = "Connecting...";
-
         if (result.IsSavedSession && result.SavedRefreshToken is not null)
         {
             await ConnectionService.ConnectWithSavedTokenAsync(
@@ -195,6 +189,20 @@ public sealed class MainWindowViewModel : ViewModelBase
         return result;
     }
 
+    private void ShowSystemMessage(string text)
+    {
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            Chat.Messages.Add(new MessageViewModel(new MessageModel(
+                Guid.NewGuid().ToString("N"),
+                new UserModel("system", "System"),
+                DateTimeOffset.Now,
+                text,
+                Chat.CurrentChannelName,
+                Chat.CurrentServerUrl)));
+        });
+    }
+
     private void WireCommandHandlerEvents()
     {
         _commandHandler.OnSetStatus += async (status, message) =>
@@ -205,7 +213,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            await ConnectionService.UpdateStatusAsync(serverUrl, status, message);
+            await ConnectionService.UpdateStatusAsync(serverUrl, status ?? UserStatus.Online, message);
         };
 
         _commandHandler.OnSetTheme += themeName =>
@@ -313,7 +321,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
             List<UserPresenceDto> users = await ConnectionService.GetOnlineUsersAsync(serverUrl, channel);
             string userList = string.Join(", ", users.Select(u => u.DisplayName ?? u.Username));
-            StatusText = $"Online in #{channel}: {userList}";
+            ShowSystemMessage($"Online in #{channel}: {userList}");
         };
 
         _commandHandler.OnSetTopic += async topic =>
@@ -428,6 +436,114 @@ public sealed class MainWindowViewModel : ViewModelBase
 
         _commandHandler.OnHelp += () => Task.CompletedTask;
 
+        _commandHandler.OnSendAction += async text =>
+        {
+            await HandleSendTextAsync(MessageConventions.FormatAction(text));
+        };
+
+        _commandHandler.OnSendBanner += async text =>
+        {
+            string? banner = AsciiBannerService.Render(text);
+            if (banner is null) return;
+            await HandleSendTextAsync(banner);
+        };
+
+        _commandHandler.OnCreateInvite += async (maxUses, expiresInHours) =>
+        {
+            string serverUrl = GetCurrentServerUrl();
+            if (string.IsNullOrEmpty(serverUrl)) return;
+
+            try
+            {
+                InviteDto? invite = await ConnectionService.CreateInviteAsync(serverUrl, maxUses, expiresInHours);
+                if (invite is not null)
+                    ShowSystemMessage($"Invite code: {invite.Code}");
+            }
+            catch (Exception ex)
+            {
+                ShowSystemMessage($"Failed to create invite: {ex.Message}");
+            }
+        };
+
+        _commandHandler.OnListInvites += async () =>
+        {
+            string serverUrl = GetCurrentServerUrl();
+            if (string.IsNullOrEmpty(serverUrl)) return;
+
+            try
+            {
+                List<InviteDto> invites = await ConnectionService.GetInvitesAsync(serverUrl);
+                if (invites.Count == 0)
+                    ShowSystemMessage("No invite codes.");
+                else
+                    ShowSystemMessage(string.Join(" | ", invites.Select(i => $"{i.Code} ({i.UseCount}/{i.MaxUses})")));
+            }
+            catch (Exception ex)
+            {
+                ShowSystemMessage($"Failed to list invites: {ex.Message}");
+            }
+        };
+
+        _commandHandler.OnRevokeInvite += async code =>
+        {
+            string serverUrl = GetCurrentServerUrl();
+            if (string.IsNullOrEmpty(serverUrl)) return;
+
+            try
+            {
+                await ConnectionService.RevokeInviteAsync(serverUrl, code);
+                ShowSystemMessage($"Invite {code} revoked.");
+            }
+            catch (Exception ex)
+            {
+                ShowSystemMessage($"Failed to revoke invite: {ex.Message}");
+            }
+        };
+
+        _commandHandler.OnExportData += async () =>
+        {
+            string serverUrl = GetCurrentServerUrl();
+            if (string.IsNullOrEmpty(serverUrl)) return;
+
+            try
+            {
+                string data = await ConnectionService.ExportMyDataAsync(serverUrl);
+                string fileName = $"echohub-export-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.json";
+                string downloadsPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                string filePath = Path.Combine(downloadsPath, "Downloads", fileName);
+                await File.WriteAllTextAsync(filePath, data);
+                ShowSystemMessage($"Data exported to {filePath}");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Export failed: {ex.Message}");
+            }
+        };
+
+        _commandHandler.OnDeleteAccount += async () =>
+        {
+            string serverUrl = GetCurrentServerUrl();
+            if (string.IsNullOrEmpty(serverUrl)) return;
+
+            IMsBox<ButtonResult> confirmBox = MessageBoxManager.GetMessageBoxStandard(
+                "Delete Account", "Are you sure you want to permanently delete your account? This cannot be undone.", ButtonEnum.YesNo);
+            ButtonResult confirm = await confirmBox.ShowWindowDialogAsync(_mainWindow);
+            if (confirm != ButtonResult.Yes) return;
+
+            string? pwd = await ShowPromptWindowAsync("Confirm Password", "Enter your password to confirm account deletion:", "Delete");
+            if (string.IsNullOrEmpty(pwd)) return;
+
+            try
+            {
+                await ConnectionService.DeleteMyAccountAsync(serverUrl, pwd);
+                ShowSystemMessage("Account deleted.");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Delete failed: {ex.Message}");
+            }
+        };
+
         _commandHandler.OnSendFile += async (target, size) =>
         {
             string serverUrl = GetCurrentServerUrl();
@@ -451,7 +567,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             }
             catch (Exception ex)
             {
-                StatusText = $"Send failed: {ex.Message}";
+                ShowSystemMessage($"Send failed: {ex.Message}");
             }
         };
 
@@ -509,7 +625,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 {
                     if (profile is null)
                     {
-                        StatusText = "User not found";
+                        Debug.WriteLine("User not found");
                         return;
                     }
 
@@ -522,10 +638,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             }
             catch (Exception ex)
             {
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                {
-                    StatusText = $"Failed to load profile: {ex.Message}";
-                });
+                Debug.WriteLine($"Failed to load profile: {ex.Message}");
             }
         };
 
@@ -534,7 +647,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             ClientConfig config = ConfigManager.Load();
             string servers = string.Join("\n", config.SavedServers.Select(s =>
                 $"{s.Name} ({s.Url}) - {s.Username ?? "?"}"));
-            StatusText = servers;
+            ShowSystemMessage(servers);
             return Task.CompletedTask;
         };
     }
@@ -570,7 +683,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 defaultChannel ??= serverVm.Channels.FirstOrDefault();
                 serverVm.SelectedChannel = defaultChannel;
 
-                StatusText = $"Connected to {server.Name}";
+                ShowSystemMessage($"Connected to {server.Name}");
             });
         };
 
@@ -582,7 +695,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 if (Sidebar.Servers.Count == 0)
                 {
                     Chat.ClearMessages();
-                    StatusText = "Ready";
+                    Debug.WriteLine("Ready");
                 }
             });
         };
@@ -602,7 +715,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
                     if (!server.IsConnected)
                     {
-                        StatusText = $"Disconnected from {server.Name}";
+                        ShowSystemMessage($"Disconnected from {server.Name}");
                     }
                 }
             });
@@ -611,8 +724,11 @@ public sealed class MainWindowViewModel : ViewModelBase
         ConnectionService.MessageReceived += (serverUrl, message) =>
         {
             string? username = ConnectionService.GetCurrentUsername(serverUrl);
-            bool isMention = !string.IsNullOrEmpty(username)
-                && message.Content.Contains($"@{username}", StringComparison.OrdinalIgnoreCase);
+            bool isReplyToMe = !string.IsNullOrEmpty(username)
+                && string.Equals(message.ReplyTo?.SenderUsername, username, StringComparison.OrdinalIgnoreCase);
+            bool isMention = isReplyToMe
+                || (!string.IsNullOrEmpty(username)
+                    && message.Content.Contains($"@{username}", StringComparison.OrdinalIgnoreCase));
 
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
@@ -653,12 +769,29 @@ public sealed class MainWindowViewModel : ViewModelBase
             }
         };
 
-        ConnectionService.ErrorOccurred += (serverUrl, error) =>
+        ConnectionService.ChannelDeleted += (serverUrl, channelName) =>
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                StatusText = $"Error: {error}";
+                ServerViewModel? serverVm = Sidebar.GetServer(serverUrl);
+                if (serverVm is null) return;
+
+                ChannelViewModel? channelVm = serverVm.Channels
+                    .FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
+                if (channelVm is not null)
+                    serverVm.Channels.Remove(channelVm);
+
+                if (string.Equals(channelName, Chat.CurrentChannelName, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(serverUrl, Chat.CurrentServerUrl, StringComparison.OrdinalIgnoreCase))
+                {
+                    Chat.ClearMessages();
+                }
             });
+        };
+
+        ConnectionService.ErrorOccurred += (serverUrl, error) =>
+        {
+            Debug.WriteLine($"Error: {error}");
         };
 
         ConnectionService.ChannelAdded += (serverUrl, channel) =>
@@ -672,6 +805,25 @@ public sealed class MainWindowViewModel : ViewModelBase
                 }
             });
         };
+    }
+
+    private async Task HandleSendTextAsync(string text)
+    {
+        string serverUrl = GetCurrentServerUrl();
+        string channelName = Chat.CurrentChannelName;
+        if (string.IsNullOrEmpty(serverUrl) || string.IsNullOrEmpty(channelName))
+        {
+            return;
+        }
+
+        try
+        {
+            await ConnectionService.SendMessageAsync(serverUrl, channelName, text);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Send failed: {ex.Message}");
+        }
     }
 
     private async Task RefreshOnlineUsersAsync(string serverUrl, string channelName)
@@ -695,18 +847,12 @@ public sealed class MainWindowViewModel : ViewModelBase
         CommandResult result = await _commandHandler.HandleAsync(commandText);
         if (result.Message is not null)
         {
-            Chat.Messages.Add(new MessageViewModel(new MessageModel(
-                Guid.NewGuid().ToString("N"),
-                new UserModel("system", "System"),
-                DateTimeOffset.Now,
-                result.Message,
-                Chat.CurrentChannelName,
-                Chat.CurrentServerUrl)));
+            ShowSystemMessage(result.Message);
         }
         return result.Message;
     }
 
-    private void HandleSendRequested(string serverUrl, string text, IReadOnlyList<string> filePaths)
+    private void HandleSendRequested(string serverUrl, string text, IReadOnlyList<string> filePaths, Guid? replyToMessageId)
     {
         if (string.IsNullOrEmpty(Chat.CurrentChannelName))
         {
@@ -720,13 +866,10 @@ public sealed class MainWindowViewModel : ViewModelBase
                 try
                 {
                     await ConnectionService.SendMessageWithAttachmentsAsync(serverUrl, Chat.CurrentChannelName, text, filePaths);
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                        StatusText = "Message sent");
                 }
                 catch (Exception ex)
                 {
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                        StatusText = $"Send failed: {ex.Message}");
+                    Debug.WriteLine($"Send failed: {ex.Message}");
                 }
             });
             return;
@@ -742,14 +885,11 @@ public sealed class MainWindowViewModel : ViewModelBase
         {
             try
             {
-                await ConnectionService.SendMessageAsync(serverUrl, Chat.CurrentChannelName, text);
+                await ConnectionService.SendMessageAsync(serverUrl, Chat.CurrentChannelName, text, replyToMessageId);
             }
             catch (Exception ex)
             {
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                {
-                    StatusText = $"Send failed: {ex.Message}";
-                });
+                Debug.WriteLine($"Send failed: {ex.Message}");
             }
         });
     }
@@ -770,14 +910,12 @@ public sealed class MainWindowViewModel : ViewModelBase
 
         try
         {
-            StatusText = "Creating channel...";
-
             ChannelDto? channel = await ConnectionService.CreateChannelAsync(
                 server.ServerUrl, dialog.ResultName!, dialog.ResultTopic, dialog.ResultIsPublic, dialog.ResultPassword);
 
             if (channel is null)
             {
-                StatusText = "Failed to create channel";
+                ShowSystemMessage("Failed to create channel");
                 return;
             }
 
@@ -804,7 +942,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                         channelVm.AddMessage(msg);
                     }
 
-                    StatusText = $"Created #{channel.Name}";
+                    ShowSystemMessage($"Created #{channel.Name}");
                 });
             }
         }
@@ -826,7 +964,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         string channelName = Chat.CurrentChannelName;
         if (string.IsNullOrEmpty(channelName) || !string.Equals(Chat.CurrentServerUrl, server.ServerUrl, StringComparison.OrdinalIgnoreCase))
         {
-            StatusText = "No channel selected on this server";
+            Debug.WriteLine("No channel selected on this server");
             return;
         }
 
@@ -864,7 +1002,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                     ?? server.Channels.FirstOrDefault();
                 server.SelectedChannel = defaultChannel;
 
-                StatusText = $"Deleted #{channelName}";
+                ShowSystemMessage($"Deleted #{channelName}");
             });
         }
         catch (Exception ex)
@@ -1008,7 +1146,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                             channel.IsLocked = false;
                             Chat.Composer.IsConnected = isServerConnected;
 
-                            if (channel.Messages.Count == 0)
+                            if (!channel.Messages.Any(m => m.AuthorName != "System"))
                             {
                                 foreach (MessageModel msg in joinResult.History)
                                 {
@@ -1109,7 +1247,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         catch (Exception ex)
         {
             serverVm.IsConnecting = false;
-            StatusText = $"Auto-connect failed for {saved.Name}: {ex.Message}";
+            Debug.WriteLine($"Auto-connect failed for {saved.Name}: {ex.Message}");
         }
     }
 
@@ -1147,7 +1285,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            StatusText = $"Disconnect error: {ex.Message}";
+            Debug.WriteLine($"Disconnect error: {ex.Message}");
         }
     }
 
@@ -1159,7 +1297,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            StatusText = $"Remove error: {ex.Message}";
+            Debug.WriteLine($"Remove error: {ex.Message}");
         }
     }
 

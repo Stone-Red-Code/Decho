@@ -23,7 +23,21 @@
 						   Text="{Binding TimeText}"
 						   FontSize="10"
 						   Margin="5 0 0 0" />
+				<TextBlock VerticalAlignment="Top"
+						   Text="↩"
+						   FontSize="10"
+						   Margin="5 0 0 0"
+						   Opacity="0.3"
+						   Cursor="Hand"
+						   PointerPressed="OnReplyPointerPressed" />
 			</StackPanel>
+			<TextBlock x:Name="ReplyQuote"
+					   VerticalAlignment="Top"
+					   TextWrapping="Wrap"
+					   FontSize="11"
+					   Opacity="0.5"
+					   IsVisible="{Binding HasReply}"
+					   PointerPressed="OnReplyQuotePointerPressed" />
 			<TextBlock x:Name="MessageContent"
 					   VerticalAlignment="Top"
 					   TextWrapping="Wrap"

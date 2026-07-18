@@ -59,7 +59,13 @@ public partial class MessageItemView : UserControl
         if (DataContext is MessageViewModel msg)
         {
             _loadedMessageId = msg.Model.Id;
-            BuildMessageInlines(msg.Content);
+            BuildMessageInlines(msg.DisplayContent);
+
+            TextBlock? replyQuote = ReplyQuote;
+            if (replyQuote is not null && msg.ReplyTo is { } reply)
+            {
+                replyQuote.Text = $"\u2514 {reply.SenderUsername}: {reply.Content}";
+            }
         }
     }
 
@@ -384,5 +390,41 @@ public partial class MessageItemView : UserControl
 
         ImageViewerWindow viewer = new ImageViewerWindow(bitmap, att.FileName, downloadAsync);
         await viewer.ShowDialog(parent);
+    }
+
+    private void OnReplyPointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+    {
+        if (DataContext is not MessageViewModel msg)
+            return;
+
+        MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
+        if (mainVm is null)
+            return;
+
+        mainVm.Chat.Composer.ReplyTarget = msg;
+    }
+
+    private void OnReplyQuotePointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+    {
+        if (DataContext is not MessageViewModel msg || msg.ReplyTo is null)
+            return;
+
+        MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
+        if (mainVm is null)
+            return;
+
+        string serverUrl = ResolveServerUrl();
+        ServerViewModel? serverVm = mainVm.Sidebar.GetServer(serverUrl);
+        if (serverVm is null)
+            return;
+
+        ChannelViewModel? channel = serverVm.Channels.FirstOrDefault(c =>
+            string.Equals(c.Name, msg.Model.ChannelName, StringComparison.OrdinalIgnoreCase));
+        if (channel is null)
+            return;
+
+        // Switch to the channel containing the original message
+        if (!string.Equals(channel.Name, mainVm.Chat.CurrentChannelName, StringComparison.OrdinalIgnoreCase))
+            mainVm.Sidebar.SelectedChannel = channel;
     }
 }
