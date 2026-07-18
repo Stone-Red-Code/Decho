@@ -8,6 +8,7 @@ using Decho.Models;
 using Decho.ViewModels;
 
 using System.Globalization;
+using System.Reactive;
 
 namespace Decho.Views;
 
@@ -39,32 +40,61 @@ public partial class MessageComposerView : UserControl
     private void OnTextBoxKeyDown(object? sender, KeyEventArgs e)
     {
         MessageComposerViewModel? vm = this.GetDataContext<MessageComposerViewModel>();
-        if (vm is null || !vm.Autocomplete.ShowPopup)
+        if (vm is null)
         {
             return;
         }
 
-        if (e.Key == Key.Down)
+        if (vm.Autocomplete.ShowPopup)
         {
-            vm.Autocomplete.SelectedIndex = Math.Min(vm.Autocomplete.SelectedIndex + 1, vm.Autocomplete.FilteredItems.Count - 1);
-            e.Handled = true;
-        }
-        else if (e.Key == Key.Up)
-        {
-            vm.Autocomplete.SelectedIndex = Math.Max(vm.Autocomplete.SelectedIndex - 1, 0);
-            e.Handled = true;
-        }
-        else if (e.Key is Key.Enter or Key.Tab)
-        {
-            if (vm.Autocomplete.SelectedIndex >= 0 && vm.Autocomplete.SelectedIndex < vm.Autocomplete.FilteredItems.Count)
+            if (e.Key == Key.Down)
             {
-                InsertAutocomplete(vm.Autocomplete.FilteredItems[vm.Autocomplete.SelectedIndex]);
+                vm.Autocomplete.SelectedIndex = Math.Min(vm.Autocomplete.SelectedIndex + 1, vm.Autocomplete.FilteredItems.Count - 1);
                 e.Handled = true;
+                return;
             }
+
+            if (e.Key == Key.Up)
+            {
+                vm.Autocomplete.SelectedIndex = Math.Max(vm.Autocomplete.SelectedIndex - 1, 0);
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Key is Key.Enter or Key.Tab)
+            {
+                if (vm.Autocomplete.SelectedIndex >= 0 && vm.Autocomplete.SelectedIndex < vm.Autocomplete.FilteredItems.Count)
+                {
+                    InsertAutocomplete(vm.Autocomplete.FilteredItems[vm.Autocomplete.SelectedIndex]);
+                    e.Handled = true;
+                }
+                return;
+            }
+
+            if (e.Key == Key.Escape)
+            {
+                vm.Autocomplete.ShowPopup = false;
+                e.Handled = true;
+                return;
+            }
+
+            return;
         }
-        else if (e.Key == Key.Escape)
+
+        if (e.Key == Key.Enter)
         {
-            vm.Autocomplete.ShowPopup = false;
+            if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+            {
+                int caret = MessageTextBox.CaretIndex;
+                string text = vm.Draft ?? "";
+                vm.Draft = text[..caret] + "\n" + text[caret..];
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => MessageTextBox.CaretIndex = caret + 1);
+                e.Handled = true;
+                return;
+            }
+
+            vm.Draft = MessageTextBox.Text ?? "";
+            vm.Send();
             e.Handled = true;
         }
     }

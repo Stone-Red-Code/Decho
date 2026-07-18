@@ -79,11 +79,9 @@
                          Margin="0 0 5 0"
                          Text="{Binding Draft, Mode=TwoWay}"
                          IsEnabled="{Binding IsConnected}"
-                         KeyDown="OnTextBoxKeyDown">
-                    <TextBox.KeyBindings>
-                        <KeyBinding Command="{Binding SendCommand}" Gesture="Enter" />
-                    </TextBox.KeyBindings>
-                </TextBox>
+                         AcceptsReturn="False"
+                         TextWrapping="Wrap"
+                         KeyDown="OnTextBoxKeyDown" />
                 <Popup x:Name="MentionPopup"
                        Placement="TopEdgeAlignedLeft"
                        PlacementTarget="{Binding #MessageTextBox}"
@@ -116,15 +114,18 @@
             <Button Grid.Column="1"
                     Height="33"
                     Width="33"
-                    Margin="0 0 5 0"
+                    Margin="0 1 5 0"
                     Content="Send"
+                    VerticalAlignment="Top"
                     i:Attached.Icon="fa-paper-plane"
                     Command="{Binding SendCommand}"
                     IsEnabled="{Binding IsConnected}" />
             <Button Grid.Column="2"
                     Height="33"
                     Width="33"
+                    Margin="0 1 0 0"
                     Click="OnFileUploadClicked"
+                    VerticalAlignment="Top"
                     i:Attached.Icon="fa-paperclip"
                     IsEnabled="{Binding IsConnected}" />
         </Grid>
