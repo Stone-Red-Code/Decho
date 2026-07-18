@@ -25,6 +25,12 @@
 
             <CheckBox x:Name="RememberCheck" Content="Remember me" IsChecked="True" />
 
+            <TextBlock Text="Display Name (optional):" FontWeight="SemiBold" />
+            <TextBox x:Name="DisplayNameBox" Watermark="Display name" />
+
+            <TextBlock Text="Invite Code (optional):" FontWeight="SemiBold" />
+            <TextBox x:Name="InviteCodeBox" Watermark="Invite code" />
+
             <StackPanel Orientation="Horizontal"
                         HorizontalAlignment="Center"
                         Spacing="10"

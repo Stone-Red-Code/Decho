@@ -3,6 +3,7 @@
              xmlns:vm="using:Decho.ViewModels"
              xmlns:models="using:Decho.Models"
              xmlns:i="https://github.com/projektanker/icons.avalonia"
+             xmlns:converters="using:Avalonia.Data.Converters"
              x:Class="Decho.Views.MessageComposerView"
              x:DataType="vm:MessageComposerViewModel">
     <Grid RowDefinitions="Auto,Auto,*">
@@ -78,7 +79,7 @@
                          HorizontalAlignment="Stretch"
                          Margin="0 0 5 0"
                          Text="{Binding Draft, Mode=TwoWay}"
-                         IsEnabled="{Binding IsConnected}"
+                         IsEnabled="{Binding IsEditable}"
                          AcceptsReturn="False"
                          TextWrapping="Wrap"
                          KeyDown="OnTextBoxKeyDown" />
@@ -119,7 +120,7 @@
                     VerticalAlignment="Top"
                     i:Attached.Icon="fa-paper-plane"
                     Command="{Binding SendCommand}"
-                    IsEnabled="{Binding IsConnected}" />
+                    IsEnabled="{Binding IsEditable}" />
             <Button Grid.Column="2"
                     Height="33"
                     Width="33"
@@ -127,7 +128,7 @@
                     Click="OnFileUploadClicked"
                     VerticalAlignment="Top"
                     i:Attached.Icon="fa-paperclip"
-                    IsEnabled="{Binding IsConnected}" />
+                    IsEnabled="{Binding IsEditable}" />
         </Grid>
     </Grid>
 </UserControl>

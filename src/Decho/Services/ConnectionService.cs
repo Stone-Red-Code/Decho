@@ -1,3 +1,6 @@
+using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
+
 using Decho.Models;
 
 using EchoHub.Client.Config;
@@ -5,8 +8,10 @@ using EchoHub.Client.Services;
 using EchoHub.Client.UI.Dialogs;
 using EchoHub.Core.Constants;
 using EchoHub.Core.DTOs;
-using EchoHub.Core.Models;
-using EchoHub.Core.Services;
+
+using MsBox.Avalonia;
+using MsBox.Avalonia.Base;
+using MsBox.Avalonia.Enums;
 
 using System.Collections.ObjectModel;
 using System.Diagnostics;
@@ -140,7 +145,9 @@ public sealed class ConnectionService : IConnectionService
             [],
             dto.Topic,
             dto.IsPublic,
-            dto.IsProtected);
+            dto.IsProtected,
+            dto.IsEncrypted,
+            dto.IsSystem);
     }
 
     internal static MessageModel MessageModelFromDto(MessageDto dto, ServerConnection entry)
@@ -219,10 +226,36 @@ public sealed class ConnectionService : IConnectionService
         SaveRefreshToken(dialogResult.ServerUrl, dialogResult.RememberMe);
         ServerAdded?.Invoke(serverModel);
 
+        // Check for version mismatch
+        //if (result.ServerInfo is not null && !string.IsNullOrEmpty(result.ServerInfo.Version)
+        //    && result.ServerInfo.Version != App.AppVersion)
+        //{
+        //    await ShowVersionMismatchDialogAsync(dialogResult.ServerUrl, result.ServerInfo.Version);
+        //}
+
         AutoJoinRemainingChannels(dialogResult.ServerUrl, result.Channels);
 
         return serverModel;
     }
+
+    //private async Task ShowVersionMismatchDialogAsync(string serverUrl, string serverVersion)
+    //{
+    //    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+    //    {
+    //        IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard(
+    //            "Version Mismatch",
+    //            $"Server version {serverVersion} does not match client version {App.AppVersion}.\n\nSome features may not work correctly. Consider updating both to the same version.",
+    //            ButtonEnum.YesNo);
+    //
+    //        ButtonResult result = await box.ShowWindowDialogAsync(
+    //            (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow);
+    //
+    //        if (result == ButtonResult.No)
+    //        {
+    //            _ = DisconnectAsync(serverUrl);
+    //        }
+    //    });
+    //}
 
     private async void AutoJoinRemainingChannels(string serverUrl, List<ChannelDto> channels)
     {
@@ -342,7 +375,9 @@ public sealed class ConnectionService : IConnectionService
                     [],
                     channel.Topic,
                     channel.IsPublic,
-                    channel.IsProtected);
+                    channel.IsProtected,
+                    channel.IsEncrypted,
+                    channel.IsSystem);
                 entry.Server.Channels.Add(model);
                 ChannelAdded?.Invoke(entry.Server.ServerUrl, model);
             }

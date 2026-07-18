@@ -32,6 +32,18 @@ public sealed class ChannelViewModel(ChannelModel model) : ViewModelBase
 
     public bool IsNotProtected => !Model.IsProtected;
 
+    public bool IsSystem => Model.IsSystem;
+
+    public bool IsNotSystem => !Model.IsSystem;
+
+    public bool ShowLockIcon => Model.IsProtected && IsLocked;
+
+    public bool ShowUnlockIcon => Model.IsProtected && !IsLocked;
+
+    public bool ShowServerIcon => Model.IsSystem && !Model.IsProtected;
+
+    public bool ShowHashtagIcon => !Model.IsProtected && !Model.IsSystem;
+
     public bool IsLocked
     {
         get;

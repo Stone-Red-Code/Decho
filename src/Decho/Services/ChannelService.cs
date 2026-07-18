@@ -205,7 +205,9 @@ internal sealed class ChannelService : IChannelService
             [],
             channelDto.Topic,
             channelDto.IsPublic,
-            channelDto.IsProtected);
+            channelDto.IsProtected,
+            channelDto.IsEncrypted,
+            channelDto.IsSystem);
         entry.Server.Channels.Add(channel);
     }
 

@@ -100,6 +100,8 @@ public sealed partial class ConnectDialogWindow : Window
         string url = UrlBox.Text?.Trim() ?? "";
         string user = UserBox.Text?.Trim() ?? "";
         string pass = PassBox.Text ?? "";
+        string displayName = DisplayNameBox.Text?.Trim() ?? "";
+        string inviteCode = InviteCodeBox.Text?.Trim() ?? "";
 
         if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(user) || string.IsNullOrEmpty(pass))
         {
@@ -108,7 +110,9 @@ public sealed partial class ConnectDialogWindow : Window
             return;
         }
 
-        Close(new ConnectDialogResult(url, user, pass, true, RememberCheck.IsChecked ?? false, null));
+        Close(new ConnectDialogResult(url, user, pass, true, RememberCheck.IsChecked ?? false, null, 
+            string.IsNullOrEmpty(displayName) ? null : displayName,
+            string.IsNullOrEmpty(inviteCode) ? null : inviteCode));
     }
 
     private void OnCancelClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)

@@ -892,7 +892,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             ChannelJoinResult joinResult = await ChannelService.JoinChannelAsync(server.ServerUrl, channel.Name);
 
             ChannelModel channelModel = new ChannelModel(
-                channel.Id.ToString(), channel.Name, [], channel.Topic, channel.IsPublic, channel.IsProtected);
+                channel.Id.ToString(), channel.Name, [], channel.Topic, channel.IsPublic, channel.IsProtected, channel.IsEncrypted, channel.IsSystem);
 
             ServerViewModel? serverVm = Sidebar.GetServer(server.ServerUrl);
             if (serverVm is not null)
@@ -1040,10 +1040,18 @@ public sealed class MainWindowViewModel : ViewModelBase
         {
             Chat.Composer.SetCommandHandler(new CommandHandler());
 
-            if (channel.IsProtected && channel.Messages.Count == 0)
+            if (channel.IsSystem)
+            {
+                Chat.Composer.IsReadOnly = true;
+            }
+            else if (channel.IsProtected && channel.Messages.Count == 0)
             {
                 channel.IsLocked = true;
-                Chat.Composer.IsConnected = false;
+                Chat.Composer.IsReadOnly = true;
+            }
+            else
+            {
+                Chat.Composer.IsReadOnly = false;
             }
 
             _ = Task.Run(async () =>
@@ -1064,7 +1072,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                                 {
                                     channel.IsLocked = true;
-                                    Chat.Composer.IsConnected = false;
+                                    Chat.Composer.IsReadOnly = true;
                                 });
                                 break;
                             }
@@ -1078,6 +1086,11 @@ public sealed class MainWindowViewModel : ViewModelBase
                             channel.IsLocked = false;
                             Chat.Composer.IsConnected = isServerConnected;
 
+                            if (channel.IsProtected)
+                            {
+                                Chat.Composer.IsReadOnly = false;
+                            }
+
                             if (!channel.Messages.Any(m => m.AuthorName != "System"))
                             {
                                 foreach (MessageModel msg in joinResult.History)
@@ -1090,7 +1103,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                         _ = RefreshOnlineUsersAsync(serverUrl, channel.Name);
                         return;
                     }
-                    catch (EchoHub.Client.Services.ChannelPasswordRequiredException)
+                    catch (ChannelPasswordRequiredException)
                     {
                         string? pwd = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
                         {
@@ -1242,7 +1255,11 @@ public sealed class MainWindowViewModel : ViewModelBase
             ChannelModel channelModel = new ChannelModel(
                 Guid.NewGuid().ToString("N"),
                 channelName,
-                []);
+                [],
+                isPublic: true,
+                isProtected: false,
+                isEncrypted: false,
+                isSystem: false);
             ChannelViewModel channelVm = new ChannelViewModel(channelModel);
             serverVm.Channels.Add(channelVm);
         }

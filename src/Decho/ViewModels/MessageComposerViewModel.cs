@@ -39,8 +39,24 @@ public sealed class MessageComposerViewModel : ViewModelBase
     public bool IsConnected
     {
         get;
-        set => this.RaiseAndSetIfChanged(ref field, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref field, value);
+            this.RaisePropertyChanged(nameof(IsEditable));
+        }
     } = true;
+
+    public bool IsReadOnly
+    {
+        get;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref field, value);
+            this.RaisePropertyChanged(nameof(IsEditable));
+        }
+    } = false;
+
+    public bool IsEditable => !IsReadOnly && IsConnected;
 
     public ReactiveCommand<Unit, Unit> SendCommand { get; }
 
@@ -84,10 +100,11 @@ public sealed class MessageComposerViewModel : ViewModelBase
         Autocomplete = new AutocompleteController([mentionProvider, channelProvider]);
 
         IObservable<bool> canSend = this.WhenAnyValue(
-            x => x.Draft,
-            x => x.HasStagedFiles,
-            (draft, hasFiles) =>
-            !string.IsNullOrWhiteSpace(draft) || hasFiles);
+                    x => x.Draft,
+                    x => x.HasStagedFiles,
+                    x => x.IsReadOnly,
+                    (draft, hasFiles, isReadOnly) =>
+                    (!string.IsNullOrWhiteSpace(draft) || hasFiles) && !isReadOnly);
         SendCommand = ReactiveCommand.Create(Send, canSend);
 
         _ = this.WhenAnyValue(x => x.Draft).Subscribe(OnDraftChanged);
