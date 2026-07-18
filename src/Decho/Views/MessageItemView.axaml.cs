@@ -69,8 +69,6 @@ public partial class MessageItemView : UserControl
         }
     }
 
-    private Window? GetParentWindow() => TopLevel.GetTopLevel(this) as Window;
-
     private async Task<Bitmap?> GetOrDownloadImageAsync(MessageViewModel msg, AttachmentDto att)
     {
         if (msg.ImageCache.TryGetValue(att.Url, out Bitmap? cached))
@@ -101,13 +99,13 @@ public partial class MessageItemView : UserControl
     private async Task OpenProfileAsync(string username, string serverUrl)
     {
         MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
-        Window? parent = GetParentWindow();
+        Window? parent = this.GetParentWindow();
         if (mainVm is null || parent is null)
         {
             return;
         }
 
-        UserProfileDto? profile = await mainVm.ConnectionService.GetUserProfileAsync(serverUrl, username);
+        UserProfileDto? profile = await mainVm.UserService.GetUserProfileAsync(serverUrl, username);
         if (profile is null)
         {
             return;
@@ -369,7 +367,7 @@ public partial class MessageItemView : UserControl
             return;
         }
 
-        Window? parent = GetParentWindow();
+        Window? parent = this.GetParentWindow();
         if (parent is null)
         {
             return;

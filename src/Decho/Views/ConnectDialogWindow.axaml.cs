@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 
 using EchoHub.Client.Config;
+using EchoHub.Client.UI.Dialogs;
 
 using MsBox.Avalonia;
 using MsBox.Avalonia.Base;
@@ -80,33 +81,18 @@ public sealed partial class ConnectDialogWindow : Window
 
         if (string.IsNullOrEmpty(pass) && saved is not null)
         {
-            Close(new ConnectDialogResult
-            {
-                ServerUrl = url,
-                Username = user,
-                IsSavedSession = true,
-                SavedRefreshToken = saved.RefreshToken,
-                RememberMe = saved.RememberMe,
-            });
+            Close(new ConnectDialogResult(url, user, "", false, saved.RememberMe, saved.RefreshToken));
+            return;
         }
-        else
-        {
-            if (string.IsNullOrEmpty(pass))
-            {
-                IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard("Validation", "Password is required.", ButtonEnum.Ok);
-                _ = await box.ShowWindowDialogAsync(this);
-                return;
-            }
 
-            Close(new ConnectDialogResult
-            {
-                ServerUrl = url,
-                Username = user,
-                Password = pass,
-                IsRegister = false,
-                RememberMe = RememberCheck.IsChecked ?? false,
-            });
+        if (string.IsNullOrEmpty(pass))
+        {
+            IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard("Validation", "Password is required.", ButtonEnum.Ok);
+            _ = await box.ShowWindowDialogAsync(this);
+            return;
         }
+
+        Close(new ConnectDialogResult(url, user, pass, false, RememberCheck.IsChecked ?? false, null));
     }
 
     private async void OnRegisterClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
@@ -122,29 +108,11 @@ public sealed partial class ConnectDialogWindow : Window
             return;
         }
 
-        Close(new ConnectDialogResult
-        {
-            ServerUrl = url,
-            Username = user,
-            Password = pass,
-            IsRegister = true,
-            RememberMe = RememberCheck.IsChecked ?? false,
-        });
+        Close(new ConnectDialogResult(url, user, pass, true, RememberCheck.IsChecked ?? false, null));
     }
 
     private void OnCancelClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         Close(null);
     }
-}
-
-public sealed class ConnectDialogResult
-{
-    public string ServerUrl { get; set; } = string.Empty;
-    public string Username { get; set; } = string.Empty;
-    public string Password { get; set; } = string.Empty;
-    public bool IsRegister { get; set; }
-    public bool RememberMe { get; set; }
-    public bool IsSavedSession { get; set; }
-    public string? SavedRefreshToken { get; set; }
 }

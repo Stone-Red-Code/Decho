@@ -7,10 +7,10 @@ using Decho.Views;
 using EchoHub.Client.Commands;
 using EchoHub.Client.Config;
 using EchoHub.Client.Services;
+using EchoHub.Client.UI.Dialogs;
 using EchoHub.Core.Constants;
 using EchoHub.Core.DTOs;
 using EchoHub.Core.Models;
-using EchoHub.Core.Security;
 using EchoHub.Core.Services;
 
 using MsBox.Avalonia;
@@ -35,15 +35,24 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     public ChatViewModel Chat { get; }
 
-    public ConnectionService ConnectionService { get; }
+    public IConnectionService ConnectionService { get; }
+
+    public IChannelService ChannelService { get; }
+
+    public IUserService UserService { get; }
+
+    public IInviteService InviteService { get; }
 
     public ReactiveCommand<Unit, Unit> AddServerCommand { get; }
 
-    public MainWindowViewModel()
+    public MainWindowViewModel(IConnectionService connectionService, IChannelService channelService, IUserService userService, IInviteService inviteService, CommandHandler commandHandler, NotificationSoundService notificationService)
     {
-        ConnectionService = new ConnectionService();
-        _commandHandler = new CommandHandler();
-        _notificationService = new NotificationSoundService(ConfigManager.Load().Notifications);
+        ConnectionService = connectionService;
+        ChannelService = channelService;
+        UserService = userService;
+        InviteService = inviteService;
+        _commandHandler = commandHandler;
+        _notificationService = notificationService;
 
         Sidebar = new SidebarViewModel();
         Chat = new ChatViewModel();
@@ -87,17 +96,13 @@ public sealed class MainWindowViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard(
-                "Connection Failed",
-                $"Could not connect to server:\n{ex.Message}",
-                ButtonEnum.Ok);
-            _ = await box.ShowWindowDialogAsync(_mainWindow);
+            await ShowErrorAsync("Connection Failed", $"Could not connect to server:\n{ex.Message}");
         }
     }
 
     private async Task ConnectAndSaveAsync(ConnectDialogResult result)
     {
-        if (result.IsSavedSession && result.SavedRefreshToken is not null)
+        if (result.SavedRefreshToken is not null)
         {
             await ConnectionService.ConnectWithSavedTokenAsync(
                 result.ServerUrl, result.Username, result.SavedRefreshToken, result.RememberMe);
@@ -203,6 +208,12 @@ public sealed class MainWindowViewModel : ViewModelBase
         });
     }
 
+    private async Task ShowErrorAsync(string title, string message)
+    {
+        IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard(title, message, ButtonEnum.Ok);
+        _ = await box.ShowWindowDialogAsync(_mainWindow);
+    }
+
     private void WireCommandHandlerEvents()
     {
         _commandHandler.OnSetStatus += async (status, message) =>
@@ -213,12 +224,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            await ConnectionService.UpdateStatusAsync(serverUrl, status ?? UserStatus.Online, message);
-        };
-
-        _commandHandler.OnSetTheme += themeName =>
-        {
-            return Task.CompletedTask;
+            await UserService.UpdateStatusAsync(serverUrl, status ?? UserStatus.Online, message);
         };
 
         _commandHandler.OnJoinChannel += async (channelName, password) =>
@@ -229,54 +235,20 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            ChannelCryptoDto? crypto = await ConnectionService.GetChannelCryptoAsync(serverUrl, channelName);
+            ChannelCryptoDto? crypto = await ChannelService.GetChannelCryptoAsync(serverUrl, channelName);
             bool isEncrypted = crypto is not null && crypto.IsEncrypted;
 
-            string? wirePassword = password;
-
-            if (isEncrypted)
+            if (isEncrypted && !ChannelService.HasChannelKey(serverUrl, channelName) && password is null)
             {
-                ServerConnection entry = ConnectionService.Connections[serverUrl];
-                entry.Manager.RoomKeys.MarkChannelEncrypted(channelName, true);
-
-                if (!entry.Manager.RoomKeys.HasKey(channelName) && password is null)
+                password = await ShowPromptWindowAsync("Unlock Channel", "Enter the passphrase to unlock messages:", "Unlock");
+                if (string.IsNullOrEmpty(password))
                 {
-                    password = await ShowPromptWindowAsync("Unlock Channel", "Enter the passphrase to unlock messages:", "Unlock");
-                    if (string.IsNullOrEmpty(password))
-                    {
-                        return;
-                    }
-                }
-
-                if (password is not null)
-                {
-                    byte[] salt = Convert.FromBase64String(crypto!.EncryptionSalt!);
-                    wirePassword = RoomCrypto.DeriveKeys(password, salt).AuthKeyHex;
-                }
-            }
-
-            ChannelJoinResult result = await ConnectionService.JoinChannelAsync(serverUrl, channelName, wirePassword);
-            EnsureChannelInList(serverUrl, channelName);
-
-            if (isEncrypted && !ConnectionService.Connections[serverUrl].Manager.RoomKeys.HasKey(channelName))
-            {
-                try
-                {
-                    ChannelJoinResult unlockResult = await ConnectionService.UnlockRoomKeyAsync(
-                        serverUrl, channelName, password, crypto!.EncryptionSalt!, result.WrappedRoomKey ?? "");
-                    if (unlockResult.History.Count > 0)
-                    {
-                        result = unlockResult;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard(
-                        "Decrypt Error", $"Decrypt failed: {ex.Message}", ButtonEnum.Ok);
-                    _ = await box.ShowWindowDialogAsync(_mainWindow);
                     return;
                 }
             }
+
+            ChannelJoinResult result = await ChannelService.JoinWithCryptoAsync(serverUrl, channelName, password);
+            EnsureChannelInList(serverUrl, channelName);
 
             ChannelModel? channelModel = FindChannel(serverUrl, channelName);
             if (channelModel is not null)
@@ -307,7 +279,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            await ConnectionService.LeaveChannelAsync(serverUrl, channel);
+            await ChannelService.LeaveChannelAsync(serverUrl, channel);
         };
 
         _commandHandler.OnListUsers += async () =>
@@ -319,7 +291,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            List<UserPresenceDto> users = await ConnectionService.GetOnlineUsersAsync(serverUrl, channel);
+            List<UserPresenceDto> users = await UserService.GetOnlineUsersAsync(serverUrl, channel);
             string userList = string.Join(", ", users.Select(u => u.DisplayName ?? u.Username));
             ShowSystemMessage($"Online in #{channel}: {userList}");
         };
@@ -333,8 +305,8 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            await ConnectionService.UpdateProfileAsync(serverUrl, null, null, null);
-            ConnectionService.UpdateChannelTopic(serverUrl, channel, topic);
+            await UserService.UpdateProfileAsync(serverUrl, null, null, null);
+            ChannelService.UpdateChannelTopic(serverUrl, channel, topic);
             Chat.ChannelTopic = topic;
         };
 
@@ -346,7 +318,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            await ConnectionService.KickUserAsync(serverUrl, username, reason);
+            await UserService.KickUserAsync(serverUrl, username, reason);
         };
 
         _commandHandler.OnBanUser += async (username, reason) =>
@@ -357,7 +329,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            await ConnectionService.BanUserAsync(serverUrl, username, reason);
+            await UserService.BanUserAsync(serverUrl, username, reason);
         };
 
         _commandHandler.OnUnbanUser += async username =>
@@ -368,7 +340,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            await ConnectionService.UnbanUserAsync(serverUrl, username);
+            await UserService.UnbanUserAsync(serverUrl, username);
         };
 
         _commandHandler.OnMuteUser += async (username, duration) =>
@@ -379,7 +351,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            await ConnectionService.MuteUserAsync(serverUrl, username, duration);
+            await UserService.MuteUserAsync(serverUrl, username, duration);
         };
 
         _commandHandler.OnUnmuteUser += async username =>
@@ -390,7 +362,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            await ConnectionService.UnmuteUserAsync(serverUrl, username);
+            await UserService.UnmuteUserAsync(serverUrl, username);
         };
 
         _commandHandler.OnAssignRole += async (username, roleStr) =>
@@ -407,7 +379,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 "mod" => ServerRole.Mod,
                 _ => ServerRole.Member,
             };
-            await ConnectionService.AssignRoleAsync(serverUrl, username, role);
+            await UserService.AssignRoleAsync(serverUrl, username, role);
         };
 
         _commandHandler.OnNukeChannel += async () =>
@@ -419,7 +391,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            await ConnectionService.NukeChannelAsync(serverUrl, channel);
+            await ChannelService.NukeChannelAsync(serverUrl, channel);
         };
 
         _commandHandler.OnTestSound += _notificationService.PlayTestAsync;
@@ -433,8 +405,6 @@ public sealed class MainWindowViewModel : ViewModelBase
 
             return Task.CompletedTask;
         };
-
-        _commandHandler.OnHelp += () => Task.CompletedTask;
 
         _commandHandler.OnSendAction += async text =>
         {
@@ -455,7 +425,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
             try
             {
-                InviteDto? invite = await ConnectionService.CreateInviteAsync(serverUrl, maxUses, expiresInHours);
+                InviteDto? invite = await InviteService.CreateInviteAsync(serverUrl, maxUses, expiresInHours);
                 if (invite is not null)
                     ShowSystemMessage($"Invite code: {invite.Code}");
             }
@@ -472,7 +442,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
             try
             {
-                List<InviteDto> invites = await ConnectionService.GetInvitesAsync(serverUrl);
+                List<InviteDto> invites = await InviteService.GetInvitesAsync(serverUrl);
                 if (invites.Count == 0)
                     ShowSystemMessage("No invite codes.");
                 else
@@ -491,7 +461,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
             try
             {
-                await ConnectionService.RevokeInviteAsync(serverUrl, code);
+                await InviteService.RevokeInviteAsync(serverUrl, code);
                 ShowSystemMessage($"Invite {code} revoked.");
             }
             catch (Exception ex)
@@ -507,7 +477,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
             try
             {
-                string data = await ConnectionService.ExportMyDataAsync(serverUrl);
+                string data = await UserService.ExportMyDataAsync(serverUrl);
                 string fileName = $"echohub-export-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.json";
                 string downloadsPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
                 string filePath = Path.Combine(downloadsPath, "Downloads", fileName);
@@ -535,7 +505,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
             try
             {
-                await ConnectionService.DeleteMyAccountAsync(serverUrl, pwd);
+                await UserService.DeleteMyAccountAsync(serverUrl, pwd);
                 ShowSystemMessage("Account deleted.");
             }
             catch (Exception ex)
@@ -558,11 +528,11 @@ public sealed class MainWindowViewModel : ViewModelBase
                 if (Uri.TryCreate(target, UriKind.Absolute, out Uri? uri)
                     && (uri.Scheme == "http" || uri.Scheme == "https"))
                 {
-                    await ConnectionService.SendUrlAsync(serverUrl, channel, target, size);
+                    await ChannelService.SendUrlAsync(serverUrl, channel, target, size);
                 }
                 else
                 {
-                    await ConnectionService.UploadFileAsync(serverUrl, channel, target, size);
+                    await ChannelService.UploadFileAsync(serverUrl, channel, target, size);
                 }
             }
             catch (Exception ex)
@@ -579,7 +549,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            await ConnectionService.UpdateProfileAsync(serverUrl, displayName, null, null);
+            await UserService.UpdateProfileAsync(serverUrl, displayName, null, null);
         };
 
         _commandHandler.OnSetColor += async color =>
@@ -590,7 +560,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            await ConnectionService.UpdateProfileAsync(serverUrl, null, null, color);
+            await UserService.UpdateProfileAsync(serverUrl, null, null, color);
         };
 
         _commandHandler.OnSetAvatar += async target =>
@@ -601,7 +571,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            await ConnectionService.SetAvatarAsync(serverUrl, target);
+            await UserService.SetAvatarAsync(serverUrl, target);
         };
 
         _commandHandler.OnOpenProfile += async username =>
@@ -612,7 +582,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            string target = username ?? ConnectionService.GetCurrentUsername(serverUrl) ?? string.Empty;
+            string target = username ?? UserService.GetCurrentUsername(serverUrl) ?? string.Empty;
             if (string.IsNullOrEmpty(target))
             {
                 return;
@@ -620,7 +590,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
             try
             {
-                UserProfileDto? profile = await ConnectionService.GetUserProfileAsync(serverUrl, target);
+                UserProfileDto? profile = await UserService.GetUserProfileAsync(serverUrl, target);
                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                 {
                     if (profile is null)
@@ -723,7 +693,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
         ConnectionService.MessageReceived += (serverUrl, message) =>
         {
-            string? username = ConnectionService.GetCurrentUsername(serverUrl);
+            string? username = UserService.GetCurrentUsername(serverUrl);
             bool isReplyToMe = !string.IsNullOrEmpty(username)
                 && string.Equals(message.ReplyTo?.SenderUsername, username, StringComparison.OrdinalIgnoreCase);
             bool isMention = isReplyToMe
@@ -818,7 +788,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
         try
         {
-            await ConnectionService.SendMessageAsync(serverUrl, channelName, text);
+            await ChannelService.SendMessageAsync(serverUrl, channelName, text);
         }
         catch (Exception ex)
         {
@@ -830,15 +800,15 @@ public sealed class MainWindowViewModel : ViewModelBase
     {
         try
         {
-            List<UserPresenceDto> users = await ConnectionService.GetOnlineUsersAsync(serverUrl, channelName);
+            List<UserPresenceDto> users = await UserService.GetOnlineUsersAsync(serverUrl, channelName);
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
                 Chat.SetOnlineUsers(users);
             });
         }
-        catch
+        catch (Exception ex)
         {
-            // silently ignore
+            Debug.WriteLine($"RefreshOnlineUsers failed: {ex.Message}");
         }
     }
 
@@ -865,7 +835,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             {
                 try
                 {
-                    await ConnectionService.SendMessageWithAttachmentsAsync(serverUrl, Chat.CurrentChannelName, text, filePaths);
+                    await ChannelService.SendMessageWithAttachmentsAsync(serverUrl, Chat.CurrentChannelName, text, filePaths);
                 }
                 catch (Exception ex)
                 {
@@ -885,7 +855,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         {
             try
             {
-                await ConnectionService.SendMessageAsync(serverUrl, Chat.CurrentChannelName, text, replyToMessageId);
+                await ChannelService.SendMessageAsync(serverUrl, Chat.CurrentChannelName, text, replyToMessageId);
             }
             catch (Exception ex)
             {
@@ -910,7 +880,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
         try
         {
-            ChannelDto? channel = await ConnectionService.CreateChannelAsync(
+            ChannelDto? channel = await ChannelService.CreateChannelAsync(
                 server.ServerUrl, dialog.ResultName!, dialog.ResultTopic, dialog.ResultIsPublic, dialog.ResultPassword);
 
             if (channel is null)
@@ -919,7 +889,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            ChannelJoinResult joinResult = await ConnectionService.JoinChannelAsync(server.ServerUrl, channel.Name);
+            ChannelJoinResult joinResult = await ChannelService.JoinChannelAsync(server.ServerUrl, channel.Name);
 
             ChannelModel channelModel = new ChannelModel(
                 channel.Id.ToString(), channel.Name, [], channel.Topic, channel.IsPublic, channel.IsProtected);
@@ -948,9 +918,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard(
-                "Error", $"Could not create channel:\n{ex.Message}", ButtonEnum.Ok);
-            _ = await box.ShowWindowDialogAsync(_mainWindow);
+            await ShowErrorAsync("Error", $"Could not create channel:\n{ex.Message}");
         }
     }
 
@@ -988,7 +956,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
         try
         {
-            await ConnectionService.DeleteChannelAsync(server.ServerUrl, channelName);
+            await ChannelService.DeleteChannelAsync(server.ServerUrl, channelName);
 
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
@@ -1007,9 +975,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard(
-                "Error", $"Could not delete channel:\n{ex.Message}", ButtonEnum.Ok);
-            _ = await box.ShowWindowDialogAsync(_mainWindow);
+            await ShowErrorAsync("Error", $"Could not delete channel:\n{ex.Message}");
         }
     }
 
@@ -1033,16 +999,16 @@ public sealed class MainWindowViewModel : ViewModelBase
         try
         {
             int offset = channel.Messages.Count;
-            List<MessageModel> older = await ConnectionService.GetHistoryAsync(serverUrl, channelName, HubConstants.DefaultHistoryCount, offset);
+            List<MessageModel> older = await ChannelService.GetHistoryAsync(serverUrl, channelName, HubConstants.DefaultHistoryCount, offset);
 
             if (older.Count > 0)
             {
                 channel.InsertMessages(older);
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // silently ignore
+            Debug.WriteLine($"LoadMore failed: {ex.Message}");
         }
         finally
         {
@@ -1087,59 +1053,25 @@ public sealed class MainWindowViewModel : ViewModelBase
                 {
                     try
                     {
-                        ChannelCryptoDto? crypto = await ConnectionService.GetChannelCryptoAsync(serverUrl, channel.Name);
+                        ChannelCryptoDto? crypto = await ChannelService.GetChannelCryptoAsync(serverUrl, channel.Name);
                         bool isEncrypted = crypto is not null && crypto.IsEncrypted;
 
-                        string? wirePassword = password;
-
-                        if (isEncrypted)
+                        if (isEncrypted && !ChannelService.HasChannelKey(serverUrl, channel.Name) && password is null)
                         {
-                            ServerConnection entry = ConnectionService.Connections[serverUrl];
-                            entry.Manager.RoomKeys.MarkChannelEncrypted(channel.Name, true);
-
-                            if (!entry.Manager.RoomKeys.HasKey(channel.Name) && password is null)
+                            string? passphrase = await ShowPromptWindowAsync("Unlock Channel", "Enter the passphrase to unlock messages:", "Unlock");
+                            if (string.IsNullOrEmpty(passphrase))
                             {
-                                string? passphrase = await ShowPromptWindowAsync("Unlock Channel", "Enter the passphrase to unlock messages:", "Unlock");
-                                if (string.IsNullOrEmpty(passphrase))
+                                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                                 {
-                                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                                    {
-                                        channel.IsLocked = true;
-                                        Chat.Composer.IsConnected = false;
-                                    });
-                                    break;
-                                }
-                                password = passphrase;
+                                    channel.IsLocked = true;
+                                    Chat.Composer.IsConnected = false;
+                                });
+                                break;
                             }
-
-                            if (password is not null)
-                            {
-                                byte[] salt = Convert.FromBase64String(crypto!.EncryptionSalt!);
-                                wirePassword = RoomCrypto.DeriveKeys(password, salt).AuthKeyHex;
-                            }
+                            password = passphrase;
                         }
 
-                        ChannelJoinResult joinResult = await ConnectionService.JoinChannelAsync(serverUrl, channel.Name, wirePassword);
-
-                        if (isEncrypted && !ConnectionService.Connections[serverUrl].Manager.RoomKeys.HasKey(channel.Name))
-                        {
-                            try
-                            {
-                                ChannelJoinResult unlockResult = await ConnectionService.UnlockRoomKeyAsync(
-                                    serverUrl, channel.Name, password, crypto!.EncryptionSalt!, joinResult.WrappedRoomKey ?? "");
-                                if (unlockResult.History.Count > 0)
-                                {
-                                    joinResult = unlockResult;
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                IMsBox<ButtonResult> errBox = MessageBoxManager.GetMessageBoxStandard(
-                                    "Decrypt Error", $"Decrypt failed: {ex.Message}", ButtonEnum.Ok);
-                                _ = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(
-                                    () => errBox.ShowWindowDialogAsync(_mainWindow));
-                            }
-                        }
+                        ChannelJoinResult joinResult = await ChannelService.JoinWithCryptoAsync(serverUrl, channel.Name, password);
 
                         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                         {
@@ -1269,11 +1201,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         catch (Exception ex)
         {
             serverVm.IsConnecting = false;
-            IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard(
-                "Connection Failed",
-                $"Could not connect to server:\n{ex.Message}",
-                ButtonEnum.Ok);
-            _ = await box.ShowWindowDialogAsync(_mainWindow);
+            await ShowErrorAsync("Connection Failed", $"Could not connect to server:\n{ex.Message}");
         }
     }
 

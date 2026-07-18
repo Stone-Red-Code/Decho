@@ -6,16 +6,13 @@ using EchoHub.Client.UI.Dialogs;
 using EchoHub.Core.Constants;
 using EchoHub.Core.DTOs;
 using EchoHub.Core.Models;
-using EchoHub.Core.Security;
 using EchoHub.Core.Services;
 
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 
 namespace Decho.Services;
 
-/// <summary>
-/// Result of joining a channel, including E2EE encryption metadata if the channel is encrypted.
-/// </summary>
 public sealed class ChannelJoinResult
 {
     public List<MessageModel> History { get; }
@@ -32,30 +29,43 @@ public sealed class ChannelJoinResult
     }
 }
 
-public sealed class ConnectionService : IDisposable
+public sealed class ConnectionService : IConnectionService
 {
     public event Action<ServerModel>? ServerAdded;
-
     public event Action<string>? ServerRemoved;
-
     public event Action<ServerModel>? ServerStateChanged;
-
     public event Action<string, ChannelModel>? ChannelAdded;
-
     public event Action<string, string>? ChannelRemoved;
-
     public event Action<string, MessageModel>? MessageReceived;
-
     public event Action<string, string, string?>? UserJoined;
-
     public event Action<string, string>? UserLeft;
-
     public event Action<string, string>? ErrorOccurred;
-
     public event Action<string, string>? ChannelDeleted;
 
     private readonly Dictionary<string, ServerConnection> _connections = new(StringComparer.OrdinalIgnoreCase);
+    private readonly IConfigPersistenceService _config;
+    private readonly IAttachmentService _attachment;
+    private readonly ConnectionStore _store;
+    private readonly IChannelService _channelService;
+
     internal IReadOnlyDictionary<string, ServerConnection> Connections => _connections;
+    internal IConnectionStore Store => _store;
+
+    public ConnectionService()
+        : this(new ConfigPersistenceService())
+    {
+    }
+
+    internal ConnectionService(IConfigPersistenceService config)
+    {
+        _config = config;
+        _store = new ConnectionStore(_connections);
+        ICryptoService crypto = new CryptoService(_store);
+        _attachment = new AttachmentService(_store);
+        _channelService = new ChannelService(_store, crypto);
+    }
+
+    // ── Connection lifecycle ──────────────────────────────────────────────
 
     public async Task<ServerModel> ConnectAsync(string serverUrl, string username, string password, bool isRegister, bool rememberMe)
     {
@@ -87,517 +97,7 @@ public sealed class ConnectionService : IDisposable
         ServerRemoved?.Invoke(serverUrl);
     }
 
-    public async Task SendMessageAsync(string serverUrl, string channelName, string content, Guid? replyToMessageId = null)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            throw new InvalidOperationException("Not connected to server");
-        }
-
-        await entry.Manager.SendMessageAsync(channelName, content, replyToMessageId);
-    }
-
-    public async Task SendMessageWithAttachmentsAsync(string serverUrl, string channelName, string content, IReadOnlyList<string> filePaths, string? size = null)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            throw new InvalidOperationException("Not connected to server");
-        }
-
-        entry.Manager.RoomKeys.TryGetKey(channelName, out byte[]? roomKey);
-        List<OutgoingAttachment> attachments = new List<OutgoingAttachment>(filePaths.Count);
-
-        foreach (string filePath in filePaths)
-        {
-            string fileName = Path.GetFileName(filePath);
-            OutgoingAttachment attachment;
-
-            if (roomKey is not null && roomKey.Length > 0)
-            {
-                byte[] bytes = await File.ReadAllBytesAsync(filePath);
-                string declaredKind;
-                string? preview = null;
-
-                await using (MemoryStream ms = new MemoryStream(bytes))
-                {
-                    if (FileValidationHelper.IsValidImage(ms))
-                    {
-                        declaredKind = "image";
-                        (int w, int h) = ImageToAsciiService.GetDimensions(size);
-                        ms.Position = 0;
-                        preview = RoomCrypto.EncryptText(new ImageToAsciiService().ConvertToAscii(ms, w, h), roomKey);
-                    }
-                    else
-                    {
-                        declaredKind = FileValidationHelper.IsAudioFile(fileName) ? "audio" : "file";
-                    }
-                }
-
-                byte[] encryptedBlob = RoomCrypto.EncryptBytes(bytes, roomKey);
-                attachment = new OutgoingAttachment(new MemoryStream(encryptedBlob), fileName, declaredKind, preview);
-            }
-            else
-            {
-                byte[] bytes = await File.ReadAllBytesAsync(filePath);
-                attachment = new OutgoingAttachment(new MemoryStream(bytes), fileName);
-            }
-
-            attachments.Add(attachment);
-        }
-
-        _ = await entry.ApiClient.SendMessageWithAttachmentsAsync(channelName, content, attachments, size);
-    }
-
-    public async Task<ChannelDto?> CreateChannelAsync(string serverUrl, string name, string? topic, bool isPublic, string? password = null)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            throw new InvalidOperationException("Not connected to server");
-        }
-
-        string? wirePassword = null, saltB64 = null, wrappedKey = null;
-
-        if (password is not null)
-        {
-            byte[] salt = RoomCrypto.GenerateSalt();
-            RoomCrypto.DerivedKeys derived = RoomCrypto.DeriveKeys(password, salt);
-            byte[] roomKey = RoomCrypto.GenerateRoomKey();
-            wirePassword = derived.AuthKeyHex;
-            saltB64 = Convert.ToBase64String(salt);
-            wrappedKey = RoomCrypto.WrapRoomKey(roomKey, derived.KeyEncryptionKey);
-            // Store the room key locally so we can decrypt messages immediately
-            entry.Manager.RoomKeys.StoreKey(name, roomKey);
-        }
-
-        ChannelDto? channel = await entry.ApiClient.CreateChannelAsync(name, topic, isPublic, wirePassword, saltB64, wrappedKey);
-        return channel;
-    }
-
-    public async Task<ChannelJoinResult> JoinChannelAsync(string serverUrl, string channelName, string? password = null)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            throw new InvalidOperationException("Not connected to server");
-        }
-
-        if (entry.Manager.TrackChannel(channelName))
-        {
-            JoinOutcome outcome = await entry.Manager.JoinChannelAsync(channelName, password);
-            RemoveFromLeftChannels(serverUrl, channelName);
-
-            List<MessageModel> history = outcome.History.Select(m => MessageModelFromDto(m, entry)).ToList();
-
-            bool isEncrypted = !string.IsNullOrEmpty(outcome.EncryptionSalt) && !string.IsNullOrEmpty(outcome.WrappedRoomKey);
-            bool hasKey = entry.Manager.RoomKeys.HasKey(channelName);
-
-            return new ChannelJoinResult(history, isEncrypted && !hasKey, outcome.EncryptionSalt, outcome.WrappedRoomKey);
-        }
-
-        RemoveFromLeftChannels(serverUrl, channelName);
-
-        // For E2EE channels where the key hasn't been stored yet, always do a real join
-        // to obtain the wrapped room key (TrackChannel returned false on re-selection,
-        // so the first branch above skipped the actual join).
-        bool encFlag = entry.Manager.RoomKeys.IsChannelEncrypted(channelName);
-        bool hasKeyFlag = entry.Manager.RoomKeys.HasKey(channelName);
-
-        if (encFlag && !hasKeyFlag)
-        {
-            JoinOutcome outcome = await entry.Manager.JoinChannelAsync(channelName, password);
-            List<MessageModel> history = outcome.History.Select(m => MessageModelFromDto(m, entry)).ToList();
-            return new ChannelJoinResult(history, true, outcome.EncryptionSalt, outcome.WrappedRoomKey);
-        }
-
-        List<MessageDto> existing = await entry.Manager.GetHistoryAsync(channelName);
-        List<MessageModel> hist = existing.Select(m => MessageModelFromDto(m, entry)).ToList();
-
-        return new ChannelJoinResult(hist, encFlag && !hasKeyFlag, null, null);
-    }
-
-    public async Task<ChannelJoinResult> UnlockRoomKeyAsync(string serverUrl, string channelName, string passphrase, string encryptionSalt, string wrappedRoomKey)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            throw new InvalidOperationException("Not connected to server");
-        }
-
-        if (!entry.Manager.RoomKeys.IsChannelEncrypted(channelName))
-        {
-            return new ChannelJoinResult([], false, null, null);
-        }
-
-        if (string.IsNullOrEmpty(encryptionSalt))
-        {
-            throw new InvalidOperationException("Encryption salt not available for this channel");
-        }
-
-        if (string.IsNullOrEmpty(wrappedRoomKey))
-        {
-            throw new InvalidOperationException("Wrapped room key not available. Re-join the channel to obtain it.");
-        }
-
-        byte[] salt = Convert.FromBase64String(encryptionSalt);
-        RoomCrypto.DerivedKeys derived = RoomCrypto.DeriveKeys(passphrase, salt);
-
-        if (!entry.Manager.RoomKeys.TryStoreFromEnvelope(channelName, wrappedRoomKey, derived.KeyEncryptionKey))
-        {
-            throw new InvalidOperationException("Wrong passphrase");
-        }
-
-        // Fetch fresh history now that the key is available
-        List<MessageDto> history = await entry.Manager.GetHistoryAsync(channelName);
-        return new ChannelJoinResult(history.Select(m => MessageModelFromDto(m, entry)).ToList(), false, null, null);
-    }
-
-    public async Task LeaveChannelAsync(string serverUrl, string channelName)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return;
-        }
-
-        await entry.Manager.LeaveChannelAsync(channelName);
-
-        ClientConfig config = ConfigManager.Load();
-        SavedServer? saved = config.SavedServers
-            .FirstOrDefault(s => string.Equals(s.Url, serverUrl, StringComparison.OrdinalIgnoreCase));
-        if (saved is not null && !saved.LeftChannels.Contains(channelName, StringComparer.OrdinalIgnoreCase))
-        {
-            saved.LeftChannels.Add(channelName);
-            ConfigManager.Save(config);
-        }
-    }
-
-    public async Task<List<MessageModel>> GetHistoryAsync(string serverUrl, string channelName, int count = HubConstants.DefaultHistoryCount, int offset = 0)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return [];
-        }
-
-        List<MessageDto> history = await entry.Manager.GetHistoryAsync(channelName, count, offset);
-        return history.Select(m => MessageModelFromDto(m, entry)).ToList();
-    }
-
-    public async Task<List<UserPresenceDto>> GetOnlineUsersAsync(string serverUrl, string channelName)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return [];
-        }
-
-        return await entry.Manager.GetOnlineUsersAsync(channelName);
-    }
-
-    public async Task UpdateStatusAsync(string serverUrl, UserStatus status, string? statusMessage)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return;
-        }
-
-        await entry.Manager.UpdateStatusAsync(status, statusMessage);
-        entry.User.Status = status;
-        entry.User.StatusMessage = statusMessage;
-    }
-
-    public async Task<ChannelDto?> CreateChannelAsync(string serverUrl, string name, string? topic, bool isPublic)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return null;
-        }
-
-        return await entry.ApiClient.CreateChannelAsync(name, topic, isPublic);
-    }
-
-    public async Task DeleteChannelAsync(string serverUrl, string channelName)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return;
-        }
-
-        await entry.ApiClient.DeleteChannelAsync(channelName);
-        entry.Manager.UntrackChannel(channelName);
-    }
-
-    public async Task<List<ChannelDto>> GetChannelsAsync(string serverUrl)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return [];
-        }
-
-        return await entry.ApiClient.GetChannelsAsync();
-    }
-
-    public async Task<ChannelCryptoDto?> GetChannelCryptoAsync(string serverUrl, string channelName)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return null;
-        }
-
-        return await entry.ApiClient.GetChannelCryptoAsync(channelName);
-    }
-
-    // ── Invites / Account ────────────────────────────────────────────────
-
-    public async Task<InviteDto?> CreateInviteAsync(string serverUrl, int? maxUses, int? expiresInHours)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return null;
-        }
-
-        return await entry.ApiClient.CreateInviteAsync(maxUses, expiresInHours);
-    }
-
-    public async Task<List<InviteDto>> GetInvitesAsync(string serverUrl)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return [];
-        }
-
-        return await entry.ApiClient.GetInvitesAsync();
-    }
-
-    public async Task RevokeInviteAsync(string serverUrl, string code)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return;
-        }
-
-        await entry.ApiClient.RevokeInviteAsync(code);
-    }
-
-    public async Task<string> ExportMyDataAsync(string serverUrl)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            throw new InvalidOperationException("Not connected");
-        }
-
-        return await entry.ApiClient.ExportMyDataAsync();
-    }
-
-    public async Task DeleteMyAccountAsync(string serverUrl, string password)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            throw new InvalidOperationException("Not connected");
-        }
-
-        await entry.ApiClient.DeleteMyAccountAsync(password);
-    }
-
-    public void MarkChannelEncrypted(string serverUrl, string channelName, bool isEncrypted)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return;
-        }
-
-        entry.Manager.RoomKeys.MarkChannelEncrypted(channelName, isEncrypted);
-    }
-
-    public async Task KickUserAsync(string serverUrl, string username, string? reason)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return;
-        }
-
-        await entry.ApiClient.KickUserAsync(username, reason);
-    }
-
-    public async Task BanUserAsync(string serverUrl, string username, string? reason)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return;
-        }
-
-        await entry.ApiClient.BanUserAsync(username, reason);
-    }
-
-    public async Task UnbanUserAsync(string serverUrl, string username)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return;
-        }
-
-        await entry.ApiClient.UnbanUserAsync(username);
-    }
-
-    public async Task MuteUserAsync(string serverUrl, string username, int? durationMinutes)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return;
-        }
-
-        await entry.ApiClient.MuteUserAsync(username, durationMinutes);
-    }
-
-    public async Task UnmuteUserAsync(string serverUrl, string username)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return;
-        }
-
-        await entry.ApiClient.UnmuteUserAsync(username);
-    }
-
-    public async Task AssignRoleAsync(string serverUrl, string username, ServerRole role)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return;
-        }
-
-        await entry.ApiClient.AssignRoleAsync(username, role);
-    }
-
-    public async Task NukeChannelAsync(string serverUrl, string channelName)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return;
-        }
-
-        await entry.ApiClient.NukeChannelAsync(channelName);
-    }
-
-    public async Task UpdateProfileAsync(string serverUrl, string? displayName, string? bio, string? nickColor)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return;
-        }
-
-        _ = await entry.ApiClient.UpdateProfileAsync(new UpdateProfileRequest(displayName, bio, nickColor));
-    }
-
-    public async Task<UserProfileDto?> GetUserProfileAsync(string serverUrl, string username)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return null;
-        }
-
-        return await entry.ApiClient.GetUserProfileAsync(username);
-    }
-
-    public async Task SetAvatarAsync(string serverUrl, string target)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return;
-        }
-
-        _ = await AvatarHelper.UploadAsync(entry.ApiClient, target);
-    }
-
-    public async Task SendUrlAsync(string serverUrl, string channelName, string url, string? size)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return;
-        }
-
-        _ = await entry.ApiClient.SendUrlAsync(channelName, url, size);
-    }
-
-    public async Task UploadFileAsync(string serverUrl, string channelName, string filePath, string? size)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return;
-        }
-
-        string fileName = Path.GetFileName(filePath);
-        OutgoingAttachment attachment;
-
-        if (entry.Manager.RoomKeys.TryGetKey(channelName, out byte[]? roomKey))
-        {
-            // End-to-end encrypted channel: encrypt the blob locally, declare its kind,
-            // and room-encrypt an image ASCII preview — the server stores the ciphertext as-is.
-            byte[] bytes = await File.ReadAllBytesAsync(filePath);
-            string declaredKind;
-            string? preview = null;
-
-            await using (MemoryStream ms = new MemoryStream(bytes))
-            {
-                if (FileValidationHelper.IsValidImage(ms))
-                {
-                    declaredKind = "image";
-                    (int w, int h) = ImageToAsciiService.GetDimensions(size);
-                    ms.Position = 0;
-                    preview = RoomCrypto.EncryptText(new ImageToAsciiService().ConvertToAscii(ms, w, h), roomKey);
-                }
-                else
-                {
-                    declaredKind = FileValidationHelper.IsAudioFile(fileName) ? "audio" : "file";
-                }
-            }
-
-            byte[] encryptedBlob = RoomCrypto.EncryptBytes(bytes, roomKey);
-            attachment = new OutgoingAttachment(new MemoryStream(encryptedBlob), fileName, declaredKind, preview);
-        }
-        else
-        {
-            await using FileStream stream = File.OpenRead(filePath);
-            attachment = new OutgoingAttachment(stream, fileName);
-        }
-
-        _ = await entry.ApiClient.SendMessageWithAttachmentsAsync(channelName, "", [attachment], size);
-    }
-
-    public void UpdateChannelTopic(string serverUrl, string channelName, string? topic)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return;
-        }
-
-        ChannelModel? channel = entry.Server.Channels.FirstOrDefault(c =>
-            string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
-        _ = channel?.Topic = topic;
-    }
-
-    public void AddChannelToList(string serverUrl, ChannelDto channelDto)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return;
-        }
-
-        ChannelModel model = ChannelModelFromDto(channelDto);
-        entry.Server.Channels.Add(model);
-        ChannelAdded?.Invoke(serverUrl, model);
-    }
-
-    public void RemoveChannelFromList(string serverUrl, string channelName)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return;
-        }
-
-        ChannelModel? channel = entry.Server.Channels.FirstOrDefault(c =>
-            string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
-        if (channel is not null)
-        {
-            _ = entry.Server.Channels.Remove(channel);
-            ChannelRemoved?.Invoke(serverUrl, channelName);
-        }
-    }
+    // ── Non-delegated helpers ─────────────────────────────────────────────
 
     public string? GetRefreshToken(string serverUrl)
     {
@@ -607,92 +107,10 @@ public sealed class ConnectionService : IDisposable
     }
 
     public async Task<string?> DownloadAttachmentAsync(string serverUrl, string channelName, string relativeUrl, string fileName)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return null;
-        }
-
-        try
-        {
-            string? tempPath = await entry.ApiClient.DownloadFileToTempAsync(relativeUrl, fileName);
-            if (tempPath is null)
-            {
-                return null;
-            }
-
-            if (entry.Manager.RoomKeys.TryGetKey(channelName, out byte[]? roomKey))
-            {
-                try
-                {
-                    byte[] encrypted = await File.ReadAllBytesAsync(tempPath);
-                    await File.WriteAllBytesAsync(tempPath, RoomCrypto.DecryptBytes(encrypted, roomKey));
-                }
-                catch
-                {
-                    // Not room ciphertext — leave the downloaded bytes as-is.
-                }
-            }
-
-            return tempPath;
-        }
-        catch
-        {
-            return null;
-        }
-    }
+        => await _attachment.DownloadAttachmentAsync(serverUrl, channelName, relativeUrl, fileName);
 
     public async Task<byte[]?> DownloadImageBytesAsync(string serverUrl, string channelName, string relativeUrl)
-    {
-        if (!_connections.TryGetValue(serverUrl, out ServerConnection? entry))
-        {
-            return null;
-        }
-
-        try
-        {
-            string? tempPath = await entry.ApiClient.DownloadFileToTempAsync(relativeUrl, "image");
-            if (tempPath is null)
-            {
-                return null;
-            }
-
-            byte[] bytes = await File.ReadAllBytesAsync(tempPath);
-            try
-            {
-                File.Delete(tempPath);
-            }
-            catch
-            {
-                // Ignore if deletion fails
-            }
-
-            if (entry.Manager.RoomKeys.TryGetKey(channelName, out byte[]? roomKey))
-            {
-                try
-                {
-                    bytes = RoomCrypto.DecryptBytes(bytes, roomKey);
-                }
-                catch
-                {
-                    // Not room ciphertext — leave the downloaded bytes as-is.
-                }
-            }
-
-            return bytes;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    public string? GetCurrentUsername(string serverUrl)
-    {
-        return _connections.TryGetValue(serverUrl, out ServerConnection? entry)
-            ? entry.User.DisplayName
-            : null;
-    }
+        => await _attachment.DownloadImageBytesAsync(serverUrl, channelName, relativeUrl);
 
     public void Dispose()
     {
@@ -702,6 +120,8 @@ public sealed class ConnectionService : IDisposable
         }
         _connections.Clear();
     }
+
+    // ── Internal helpers ──────────────────────────────────────────────────
 
     internal static ChannelModel ChannelModelFromDto(ChannelDto dto)
     {
@@ -739,35 +159,14 @@ public sealed class ConnectionService : IDisposable
         return _connections.TryGetValue(serverUrl, out ServerConnection? conn) ? conn : null;
     }
 
-    private static void ModifyConfig(string serverUrl, Action<ClientConfig, SavedServer?> action)
+    private void RemoveServerFromConfig(string serverUrl)
     {
-        ClientConfig config = ConfigManager.Load();
-        SavedServer? saved = config.SavedServers.FirstOrDefault(s =>
-            string.Equals(s.Url, serverUrl, StringComparison.OrdinalIgnoreCase));
-        action(config, saved);
-        ConfigManager.Save(config);
+        _config.RemoveServerFromConfig(serverUrl);
     }
 
-    private static void RemoveServerFromConfig(string serverUrl)
+    private void RemoveFromLeftChannels(string serverUrl, string channelName)
     {
-        ModifyConfig(serverUrl, (config, saved) =>
-        {
-            if (saved is not null)
-            {
-                _ = config.SavedServers.Remove(saved);
-            }
-        });
-    }
-
-    private static void RemoveFromLeftChannels(string serverUrl, string channelName)
-    {
-        ClientConfig config = ConfigManager.Load();
-        SavedServer? saved = config.SavedServers
-            .FirstOrDefault(s => string.Equals(s.Url, serverUrl, StringComparison.OrdinalIgnoreCase));
-        if (saved is not null && saved.LeftChannels.Remove(channelName))
-        {
-            ConfigManager.Save(config);
-        }
+        _config.RemoveFromLeftChannels(serverUrl, channelName);
     }
 
     private async Task<ServerModel> ConnectCoreAsync(ConnectDialogResult dialogResult)
@@ -837,15 +236,15 @@ public sealed class ConnectionService : IDisposable
 
             try
             {
-                _ = await JoinChannelAsync(serverUrl, ch.Name);
+                _ = await _channelService.JoinChannelAsync(serverUrl, ch.Name);
+                RemoveFromLeftChannels(serverUrl, ch.Name);
             }
             catch (EchoHub.Client.Services.ChannelPasswordRequiredException)
             {
-                // protected channel — join stays manual
             }
-            catch
+            catch (Exception ex)
             {
-                // skip channels we can't join
+                Debug.WriteLine($"Auto-join failed for {ch.Name}: {ex.Message}");
             }
         }
     }
@@ -886,24 +285,7 @@ public sealed class ConnectionService : IDisposable
             return;
         }
 
-        ModifyConfig(serverUrl, (config, saved) =>
-        {
-            if (saved is null)
-            {
-                saved = new SavedServer
-                {
-                    Name = new Uri(serverUrl).Host,
-                    Url = serverUrl,
-                    Username = entry.User.Id,
-                    RememberMe = true,
-                    LastConnected = DateTimeOffset.Now,
-                };
-                config.SavedServers.Add(saved);
-            }
-
-            saved.RefreshToken = token;
-            saved.LastConnected = DateTimeOffset.Now;
-        });
+        _config.SaveRefreshToken(serverUrl, token, entry.User.Id);
     }
 
     private void WireConnectionEvents(ServerConnection entry, ConnectionManager conn)
@@ -975,21 +357,5 @@ public sealed class ConnectionService : IDisposable
             entry.Server.IsConnecting = status is "Connecting..." or "Authenticating..." or "Reconnecting...";
             ServerStateChanged?.Invoke(entry.Server);
         };
-    }
-}
-
-internal sealed class ServerConnection
-{
-    public ApiClient ApiClient { get; }
-    public ServerModel Server { get; }
-    public UserModel User { get; }
-    internal ConnectionManager Manager { get; }
-
-    internal ServerConnection(ConnectionManager manager, ApiClient apiClient, ServerModel server, UserModel user)
-    {
-        Manager = manager;
-        ApiClient = apiClient;
-        Server = server;
-        User = user;
     }
 }

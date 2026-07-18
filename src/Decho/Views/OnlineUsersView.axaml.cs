@@ -20,18 +20,15 @@ public partial class OnlineUsersView : UserControl
             return;
         }
 
-        if (TopLevel.GetTopLevel(this) is not Window parent)
-        {
-            return;
-        }
-
-        if (parent.DataContext is not MainWindowViewModel mainVm)
+        Window? parent = this.GetParentWindow();
+        MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
+        if (parent is null || mainVm is null)
         {
             return;
         }
 
         string serverUrl = mainVm.Chat.CurrentServerUrl;
-        UserProfileDto? profile = await mainVm.ConnectionService.GetUserProfileAsync(serverUrl, user.Username);
+        UserProfileDto? profile = await mainVm.UserService.GetUserProfileAsync(serverUrl, user.Username);
         if (profile is null)
         {
             return;

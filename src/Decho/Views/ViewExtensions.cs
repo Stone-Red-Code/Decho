@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 
 using Decho.ViewModels;
@@ -14,5 +15,10 @@ internal static class ViewExtensions
     public static MainWindowViewModel? GetMainWindowViewModel(this Control control)
     {
         return TopLevel.GetTopLevel(control)?.DataContext as MainWindowViewModel;
+    }
+
+    public static Window? GetParentWindow(this Control control)
+    {
+        return TopLevel.GetTopLevel(control) as Window;
     }
 }
