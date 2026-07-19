@@ -110,7 +110,7 @@ public sealed partial class ConnectDialogWindow : Window
             return;
         }
 
-        Close(new ConnectDialogResult(url, user, pass, true, RememberCheck.IsChecked ?? false, null, 
+        Close(new ConnectDialogResult(url, user, pass, true, RememberCheck.IsChecked ?? false, null,
             string.IsNullOrEmpty(displayName) ? null : displayName,
             string.IsNullOrEmpty(inviteCode) ? null : inviteCode));
     }

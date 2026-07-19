@@ -41,7 +41,17 @@ public sealed class ChatViewModel : ViewModelBase
 
     public bool ShowOnlineUsers
     {
-        get;
+        get
+        {
+            if (OnlineUsers.Count > 0)
+            {
+                return field;
+            }
+            else
+            {
+                return false;
+            }
+        }
         set => this.RaiseAndSetIfChanged(ref field, value);
     }
 
@@ -74,6 +84,11 @@ public sealed class ChatViewModel : ViewModelBase
     {
         Composer = new MessageComposerViewModel();
         ToggleUsersPanelCommand = ReactiveCommand.Create(ToggleUsersPanel);
+
+        OnlineUsers.CollectionChanged += (s, e) =>
+        {
+            this.RaisePropertyChanged(nameof(ShowOnlineUsers));
+        };
     }
 
     public void SetChannel(ChannelViewModel? channel, string serverUrl = "", bool isServerConnected = true)
@@ -86,7 +101,6 @@ public sealed class ChatViewModel : ViewModelBase
             HasTopic = false;
             CurrentChannelName = string.Empty;
             CurrentServerUrl = string.Empty;
-            ShowOnlineUsers = false;
             OnlineUsers.Clear();
             OnlineUserCount = string.Empty;
             Composer.SetServer(string.Empty, isServerConnected);
@@ -103,7 +117,6 @@ public sealed class ChatViewModel : ViewModelBase
 
         if (!isServerConnected)
         {
-            ShowOnlineUsers = false;
             OnlineUsers.Clear();
             OnlineUserCount = string.Empty;
         }
@@ -117,7 +130,6 @@ public sealed class ChatViewModel : ViewModelBase
             OnlineUsers.Add(new UserViewModel(user));
         }
         OnlineUserCount = $"{users.Count}";
-        ShowOnlineUsers = true;
         Composer.UpdateAvailableUsers(OnlineUsers);
     }
 
@@ -128,7 +140,6 @@ public sealed class ChatViewModel : ViewModelBase
             OnlineUsers.Add(new UserViewModel(user));
             OnlineUserCount = $"{OnlineUsers.Count}";
         }
-        ShowOnlineUsers = OnlineUsers.Count > 0;
         Composer.UpdateAvailableUsers(OnlineUsers);
     }
 

@@ -1128,7 +1128,6 @@ public sealed class MainWindowViewModel : ViewModelBase
                             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                             {
                                 Chat.OnlineUsers.Clear();
-                                Chat.ShowOnlineUsers = false;
                                 Chat.OnlineUserCount = string.Empty;
                             });
                             return;
@@ -1146,7 +1145,6 @@ public sealed class MainWindowViewModel : ViewModelBase
                         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                         {
                             Chat.OnlineUsers.Clear();
-                            Chat.ShowOnlineUsers = false;
                             Chat.OnlineUserCount = string.Empty;
                         });
                         return;
