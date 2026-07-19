@@ -652,8 +652,6 @@ public sealed class MainWindowViewModel : ViewModelBase
                 defaultChannel ??= serverVm.Channels.FirstOrDefault(c => c.IsPublic);
                 defaultChannel ??= serverVm.Channels.FirstOrDefault();
                 serverVm.SelectedChannel = defaultChannel;
-
-                ShowSystemMessage($"Connected to {server.Name}");
             });
         };
 
@@ -681,11 +679,6 @@ public sealed class MainWindowViewModel : ViewModelBase
                     if (string.Equals(server.ServerUrl, Chat.CurrentServerUrl, StringComparison.OrdinalIgnoreCase))
                     {
                         Chat.Composer.IsConnected = server.IsConnected;
-                    }
-
-                    if (!server.IsConnected)
-                    {
-                        ShowSystemMessage($"Disconnected from {server.Name}");
                     }
                 }
             });
