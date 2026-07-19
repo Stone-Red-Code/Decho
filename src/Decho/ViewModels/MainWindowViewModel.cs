@@ -27,6 +27,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 {
     private readonly CommandHandler _commandHandler;
     private readonly NotificationSoundService _notificationService;
+    private readonly OsNotificationService _osNotificationService;
     private Window? _mainWindow;
 
     public string Title { get; } = "Decho";
@@ -45,7 +46,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     public ReactiveCommand<Unit, Unit> AddServerCommand { get; }
 
-    public MainWindowViewModel(IConnectionService connectionService, IChannelService channelService, IUserService userService, IInviteService inviteService, CommandHandler commandHandler, NotificationSoundService notificationService)
+    public MainWindowViewModel(IConnectionService connectionService, IChannelService channelService, IUserService userService, IInviteService inviteService, CommandHandler commandHandler, NotificationSoundService notificationService, OsNotificationService osNotificationService)
     {
         ConnectionService = connectionService;
         ChannelService = channelService;
@@ -53,6 +54,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         InviteService = inviteService;
         _commandHandler = commandHandler;
         _notificationService = notificationService;
+        _osNotificationService = osNotificationService;
 
         Sidebar = new SidebarViewModel();
         Chat = new ChatViewModel();
@@ -725,6 +727,9 @@ public sealed class MainWindowViewModel : ViewModelBase
             if (isMention)
             {
                 _ = _notificationService.PlayAsync();
+                string title = $"@{username} – {new Uri(serverUrl).Host}";
+                string body = $"{message.Author.DisplayName} in #{message.ChannelName}: {message.Content}";
+                _osNotificationService.Show(title, body);
             }
         };
 

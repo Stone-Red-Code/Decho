@@ -69,6 +69,10 @@ public partial class App : Application
         NotificationSoundService notificationService = new(ConfigManager.Load().Notifications);
         Locator.CurrentMutable.RegisterLazySingleton<NotificationSoundService>(() => notificationService);
 
+        OsNotificationService osNotificationService = new();
+        osNotificationService.Initialize();
+        Locator.CurrentMutable.RegisterLazySingleton<OsNotificationService>(() => osNotificationService);
+
         Locator.CurrentMutable.Register<MainWindowViewModel>(() =>
             new MainWindowViewModel(
                 Locator.Current.GetService<IConnectionService>()!,
@@ -76,6 +80,7 @@ public partial class App : Application
                 Locator.Current.GetService<IUserService>()!,
                 Locator.Current.GetService<IInviteService>()!,
                 Locator.Current.GetService<CommandHandler>()!,
-                Locator.Current.GetService<NotificationSoundService>()!));
+                Locator.Current.GetService<NotificationSoundService>()!,
+                Locator.Current.GetService<OsNotificationService>()!));
     }
 }
