@@ -37,18 +37,11 @@ internal sealed class ChannelService : IChannelService
 
         if (isEncrypted && !HasChannelKey(serverUrl, channelName) && password is not null)
         {
-            try
+            ChannelJoinResult unlockResult = await UnlockRoomKeyAsync(
+                serverUrl, channelName, password, crypto!.EncryptionSalt!, result.WrappedRoomKey ?? "");
+            if (unlockResult.History.Count > 0)
             {
-                ChannelJoinResult unlockResult = await UnlockRoomKeyAsync(
-                    serverUrl, channelName, password, crypto!.EncryptionSalt!, result.WrappedRoomKey ?? "");
-                if (unlockResult.History.Count > 0)
-                {
-                    result = unlockResult;
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Unlock failed: {ex.Message}");
+                result = unlockResult;
             }
         }
 

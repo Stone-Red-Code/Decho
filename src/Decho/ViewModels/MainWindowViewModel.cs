@@ -235,32 +235,46 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            ChannelCryptoDto? crypto = await ChannelService.GetChannelCryptoAsync(serverUrl, channelName);
-            bool isEncrypted = crypto is not null && crypto.IsEncrypted;
-
-            if (isEncrypted && !ChannelService.HasChannelKey(serverUrl, channelName) && password is null)
+            string? promptMessage = null;
+            while (true)
             {
-                password = await ShowPromptWindowAsync("Unlock Channel", "Enter the passphrase to unlock messages:", "Unlock");
-                if (string.IsNullOrEmpty(password))
+                try
                 {
+                    ChannelCryptoDto? crypto = await ChannelService.GetChannelCryptoAsync(serverUrl, channelName);
+                    bool isEncrypted = crypto is not null && crypto.IsEncrypted;
+
+                    if (isEncrypted && !ChannelService.HasChannelKey(serverUrl, channelName) && password is null)
+                    {
+                        password = await ShowPromptWindowAsync("Unlock Channel", promptMessage ?? "Enter the passphrase to unlock messages:", "Unlock");
+                        if (string.IsNullOrEmpty(password))
+                        {
+                            return;
+                        }
+                    }
+
+                    ChannelJoinResult result = await ChannelService.JoinWithCryptoAsync(serverUrl, channelName, password);
+                    EnsureChannelInList(serverUrl, channelName);
+
+                    ChannelModel? channelModel = FindChannel(serverUrl, channelName);
+                    if (channelModel is not null)
+                    {
+                        ChannelViewModel? channelVm = Sidebar.GetServer(serverUrl)?.Channels
+                            .FirstOrDefault(c => c.Name == channelName);
+                        if (channelVm is not null)
+                        {
+                            foreach (MessageModel msg in result.History)
+                            {
+                                channelVm.AddMessage(msg);
+                            }
+                        }
+                    }
+
                     return;
                 }
-            }
-
-            ChannelJoinResult result = await ChannelService.JoinWithCryptoAsync(serverUrl, channelName, password);
-            EnsureChannelInList(serverUrl, channelName);
-
-            ChannelModel? channelModel = FindChannel(serverUrl, channelName);
-            if (channelModel is not null)
-            {
-                ChannelViewModel? channelVm = Sidebar.GetServer(serverUrl)?.Channels
-                    .FirstOrDefault(c => c.Name == channelName);
-                if (channelVm is not null)
+                catch (InvalidOperationException ex) when (ex.Message == "Wrong passphrase")
                 {
-                    foreach (MessageModel msg in result.History)
-                    {
-                        channelVm.AddMessage(msg);
-                    }
+                    password = null;
+                    promptMessage = "Wrong passphrase - try again.";
                 }
             }
         };
@@ -1050,6 +1064,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             _ = Task.Run(async () =>
             {
                 string? password = null;
+                string? promptMessage = null;
                 while (true)
                 {
                     try
@@ -1057,9 +1072,9 @@ public sealed class MainWindowViewModel : ViewModelBase
                         ChannelCryptoDto? crypto = await ChannelService.GetChannelCryptoAsync(serverUrl, channel.Name);
                         bool isEncrypted = crypto is not null && crypto.IsEncrypted;
 
-                        if (isEncrypted && !ChannelService.HasChannelKey(serverUrl, channel.Name) && password is null)
+                        if (isEncrypted && !ChannelService.HasChannelKey(serverUrl, channel.Name))
                         {
-                            string? passphrase = await ShowPromptWindowAsync("Unlock Channel", "Enter the passphrase to unlock messages:", "Unlock");
+                            string? passphrase = await ShowPromptWindowAsync("Unlock Channel", promptMessage ?? "Enter the passphrase to unlock messages:", "Unlock");
                             if (string.IsNullOrEmpty(passphrase))
                             {
                                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
@@ -1120,6 +1135,11 @@ public sealed class MainWindowViewModel : ViewModelBase
                         }
 
                         password = pwd;
+                    }
+                    catch (InvalidOperationException ex) when (ex.Message == "Wrong passphrase")
+                    {
+                        password = null;
+                        promptMessage = "Wrong passphrase - try again.";
                     }
                     catch
                     {
