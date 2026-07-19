@@ -54,6 +54,10 @@ public sealed class MessageViewModel(MessageModel model) : ViewModelBase
 
     public bool HasAttachments => Attachments.Count > 0;
 
+    public IReadOnlyList<EmbedDto> Embeds => Model.Embeds;
+
+    public bool HasEmbeds => Embeds.Count > 0;
+
     public bool ShowContent => !string.IsNullOrEmpty(Content);
 
     public string TimeText

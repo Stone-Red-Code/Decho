@@ -2,6 +2,7 @@
 			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 			 xmlns:vm="using:Decho.ViewModels"
 			 xmlns:dto="using:EchoHub.Core.DTOs"
+			 xmlns:conv="using:Decho.Converters"
 			 x:Class="Decho.Views.MessageItemView"
 			 x:DataType="vm:MessageViewModel">
 	<Grid Margin="5" ColumnDefinitions="Auto, *">
@@ -64,6 +65,35 @@
 									HorizontalAlignment="Left"
 									Margin="0 2 0 0" />
 						</StackPanel>
+					</DataTemplate>
+				</ItemsControl.ItemTemplate>
+			</ItemsControl>
+			<ItemsControl ItemsSource="{Binding Embeds}"
+						  IsVisible="{Binding HasEmbeds}"
+						  Margin="0 4 0 0">
+				<ItemsControl.ItemTemplate>
+					<DataTemplate x:DataType="dto:EmbedDto">
+						<Border BorderThickness="3 0 0 0"
+								BorderBrush="{Binding ThemeColor, TargetNullValue=Gray}"
+								CornerRadius="4"
+								Background="{DynamicResource UiTheme01}"
+								Padding="10"
+								Margin="0 2 0 2">
+							<StackPanel Spacing="2">
+								<TextBlock Text="{Binding SiteName}"
+										   FontSize="11"
+										   Opacity="0.6"
+										   IsVisible="{Binding SiteName, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}" />
+								<TextBlock Text="{Binding Title}"
+										   FontWeight="Bold"
+										   TextWrapping="Wrap" />
+								<TextBlock Text="{Binding Description}"
+										   FontSize="12"
+										   Opacity="0.8"
+										   TextWrapping="Wrap"
+										   IsVisible="{Binding Description, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}" />
+							</StackPanel>
+						</Border>
 					</DataTemplate>
 				</ItemsControl.ItemTemplate>
 			</ItemsControl>

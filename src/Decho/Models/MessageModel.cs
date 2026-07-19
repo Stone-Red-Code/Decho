@@ -10,7 +10,8 @@ public sealed class MessageModel(
     string channelName,
     string? serverUrl = null,
     List<AttachmentDto>? attachments = null,
-    ReplyRefDto? replyTo = null)
+    ReplyRefDto? replyTo = null,
+    List<EmbedDto>? embeds = null)
 {
     public string Id { get; } = id;
 
@@ -27,4 +28,6 @@ public sealed class MessageModel(
     public List<AttachmentDto> Attachments { get; } = attachments ?? [];
 
     public ReplyRefDto? ReplyTo { get; } = replyTo;
+
+    public List<EmbedDto> Embeds { get; } = embeds ?? [];
 }

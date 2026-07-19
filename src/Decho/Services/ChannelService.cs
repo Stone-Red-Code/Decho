@@ -334,6 +334,7 @@ internal sealed class ChannelService : IChannelService
             dto.ChannelName,
             entry.Server.ServerUrl,
             attachments,
-            dto.ReplyTo);
+            dto.ReplyTo,
+            dto.Embeds);
     }
 }

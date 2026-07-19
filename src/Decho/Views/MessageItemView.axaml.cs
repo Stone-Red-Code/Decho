@@ -267,7 +267,7 @@ public partial class MessageItemView : UserControl
         }
         catch
         {
-            // Image failed to load — filename is shown as fallback
+            // Image failed to load filename is shown as fallback
         }
     }
 

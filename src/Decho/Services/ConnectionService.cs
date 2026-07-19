@@ -1,6 +1,3 @@
-using Avalonia;
-using Avalonia.Controls.ApplicationLifetimes;
-
 using Decho.Models;
 
 using EchoHub.Client.Config;
@@ -8,10 +5,6 @@ using EchoHub.Client.Services;
 using EchoHub.Client.UI.Dialogs;
 using EchoHub.Core.Constants;
 using EchoHub.Core.DTOs;
-
-using MsBox.Avalonia;
-using MsBox.Avalonia.Base;
-using MsBox.Avalonia.Enums;
 
 using System.Collections.ObjectModel;
 using System.Diagnostics;
@@ -167,7 +160,8 @@ public sealed class ConnectionService : IConnectionService
             dto.ChannelName,
             entry.Server.ServerUrl,
             attachments,
-            dto.ReplyTo);
+            dto.ReplyTo,
+            dto.Embeds ?? []);
     }
 
     internal ServerConnection? GetConnection(string serverUrl)
