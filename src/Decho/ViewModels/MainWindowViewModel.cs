@@ -20,6 +20,7 @@ using MsBox.Avalonia.Enums;
 using System.Diagnostics;
 using System.Reactive;
 using System.Reactive.Linq;
+using System.Linq;
 
 namespace Decho.ViewModels;
 
@@ -787,6 +788,11 @@ public sealed class MainWindowViewModel : ViewModelBase
                 }
             });
         };
+
+        ConnectionService.Reconnected += serverUrl =>
+        {
+            _ = RefreshCurrentChannelAsync(serverUrl);
+        };
     }
 
     private async Task HandleSendTextAsync(string text)
@@ -821,6 +827,40 @@ public sealed class MainWindowViewModel : ViewModelBase
         catch (Exception ex)
         {
             Debug.WriteLine($"RefreshOnlineUsers failed: {ex.Message}");
+        }
+    }
+
+    private async Task RefreshCurrentChannelAsync(string serverUrl)
+    {
+        if (!string.Equals(serverUrl, Chat.CurrentServerUrl, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        string channelName = Chat.CurrentChannelName;
+        if (string.IsNullOrEmpty(channelName))
+            return;
+
+        ChannelViewModel? channel = FindChannelViewModel(serverUrl, channelName);
+        if (channel is null)
+            return;
+
+        try
+        {
+            List<MessageModel> latest = await ChannelService.GetHistoryAsync(serverUrl, channelName, HubConstants.DefaultHistoryCount, 0);
+            HashSet<string> existingIds = channel.Messages.Select(m => m.Model.Id).ToHashSet();
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                foreach (MessageModel msg in latest)
+                {
+                    if (!existingIds.Contains(msg.Id))
+                    {
+                        channel.AddMessage(msg);
+                    }
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"RefreshCurrentChannel failed: {ex.Message}");
         }
     }
 
@@ -1104,12 +1144,10 @@ public sealed class MainWindowViewModel : ViewModelBase
                                 Chat.Composer.IsReadOnly = false;
                             }
 
-                            if (!channel.Messages.Any(m => m.AuthorName != "System"))
+                            HashSet<string> existingIds = channel.Messages.Select(m => m.Model.Id).ToHashSet();
+                            foreach (var msg in joinResult.History.Where(msg => !existingIds.Contains(msg.Id)))
                             {
-                                foreach (MessageModel msg in joinResult.History)
-                                {
-                                    channel.AddMessage(msg);
-                                }
+                                channel.AddMessage(msg);
                             }
                         });
 

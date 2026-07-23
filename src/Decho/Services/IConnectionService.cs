@@ -17,6 +17,7 @@ public interface IConnectionService : IDisposable
     event Action<string, string>? UserLeft;
     event Action<string, string>? ErrorOccurred;
     event Action<string, string>? ChannelDeleted;
+    event Action<string>? Reconnected;
 
     Task<ServerModel> ConnectAsync(string serverUrl, string username, string password, bool isRegister, bool rememberMe);
     Task ConnectWithSavedTokenAsync(string serverUrl, string username, string refreshToken, bool rememberMe);

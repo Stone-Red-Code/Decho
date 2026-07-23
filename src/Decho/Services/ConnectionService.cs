@@ -49,6 +49,8 @@ public sealed class ConnectionService : IConnectionService
 
     public event Action<string, string>? ChannelDeleted;
 
+    public event Action<string>? Reconnected;
+
     private readonly Dictionary<string, ServerConnection> _connections = new(StringComparer.OrdinalIgnoreCase);
     private readonly IConfigPersistenceService _config;
     private readonly IAttachmentService _attachment;
@@ -394,6 +396,19 @@ public sealed class ConnectionService : IConnectionService
             entry.Server.IsConnected = status == "Connected";
             entry.Server.IsConnecting = status is "Connecting..." or "Authenticating..." or "Reconnecting...";
             ServerStateChanged?.Invoke(entry.Server);
+        };
+
+        conn.Reconnected += async () =>
+        {
+            try
+            {
+                await entry.Manager.RejoinChannelsAsync();
+                Reconnected?.Invoke(entry.Server.ServerUrl);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Rejoin failed: {ex.Message}");
+            }
         };
     }
 }
