@@ -9,6 +9,8 @@ public sealed class ChatViewModel : ViewModelBase
 {
     public Action? LoadMoreRequested;
 
+    public Action<string>? ScrollToMessageRequested;
+
     public ObservableCollection<MessageViewModel> Messages
     {
         get;

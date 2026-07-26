@@ -7,6 +7,7 @@ using Avalonia.Platform.Storage;
 using Decho.Models;
 using Decho.ViewModels;
 
+using System.Diagnostics;
 using System.Globalization;
 using System.Reactive;
 
@@ -21,6 +22,9 @@ public partial class MessageComposerView : UserControl
         AddHandler(DragDrop.DropEvent, OnDrop);
         DragDrop.SetAllowDrop(this, true);
         DataContextChanged += OnDataContextChanged;
+
+        // Intercept Enter before the TextBox processes it (AcceptsReturn=True would insert a newline)
+        MessageTextBox.AddHandler(InputElement.KeyDownEvent, OnTextBoxTunnelingKeyDown, RoutingStrategies.Tunnel);
     }
 
     private void OnDataContextChanged(object? sender, EventArgs e)
@@ -81,22 +85,34 @@ public partial class MessageComposerView : UserControl
             return;
         }
 
-        if (e.Key == Key.Enter)
+        if (e.Key == Key.Escape)
         {
-            if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+            bool hasReply = vm.HasReplyTarget;
+            bool hasFiles = vm.HasStagedFiles;
+            if (hasReply || hasFiles)
             {
-                int caret = MessageTextBox.CaretIndex;
-                string text = vm.Draft ?? "";
-                vm.Draft = text[..caret] + "\n" + text[caret..];
-                Avalonia.Threading.Dispatcher.UIThread.Post(() => MessageTextBox.CaretIndex = caret + 1);
+                if (hasReply) vm.ClearReplyTarget();
+                if (hasFiles) vm.ClearStagedFiles();
                 e.Handled = true;
                 return;
             }
-
-            vm.Draft = MessageTextBox.Text ?? "";
-            vm.Send();
-            e.Handled = true;
         }
+    }
+
+    private void OnTextBoxTunnelingKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Shift)) return;
+
+        MessageComposerViewModel? vm = this.GetDataContext<MessageComposerViewModel>();
+        if (vm is null) return;
+
+        // Don't intercept Enter when autocomplete is open (bubbling handler handles it)
+        if (vm.Autocomplete.ShowPopup) return;
+
+        vm.Draft = MessageTextBox.Text ?? "";
+        vm.Send();
+        e.Handled = true;
     }
 
     private void OnMentionPointerPressed(object? sender, PointerPressedEventArgs e)

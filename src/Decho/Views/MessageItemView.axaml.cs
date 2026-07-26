@@ -7,6 +7,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 
+using Decho.Models;
 using Decho.ViewModels;
 
 using EchoHub.Core.DTOs;
@@ -64,7 +65,7 @@ public partial class MessageItemView : UserControl
             TextBlock? replyQuote = ReplyQuote;
             if (replyQuote is not null && msg.ReplyTo is { } reply)
             {
-                replyQuote.Text = $"\u2514 {reply.SenderUsername}: {reply.Content}";
+                replyQuote.Text = $"\u2514 {reply.SenderUsername}: {reply.Content.Replace('\n', ' ')[..Math.Min(100, reply.Content.Length)]}";
             }
         }
     }
@@ -421,8 +422,66 @@ public partial class MessageItemView : UserControl
         if (channel is null)
             return;
 
-        // Switch to the channel containing the original message
-        if (!string.Equals(channel.Name, mainVm.Chat.CurrentChannelName, StringComparison.OrdinalIgnoreCase))
+        string targetId = msg.ReplyTo.MessageId.ToString("N");
+        bool needsSwitch = !string.Equals(channel.Name, mainVm.Chat.CurrentChannelName, StringComparison.OrdinalIgnoreCase);
+
+        if (needsSwitch)
+        {
             mainVm.Sidebar.SelectedChannel = channel;
+        }
+
+        JumpToReply(targetId, needsSwitch);
+    }
+
+    private async void JumpToReply(string targetId, bool needsSwitch)
+    {
+        if (needsSwitch)
+        {
+            await Task.Delay(100);
+        }
+
+        MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
+        if (mainVm is null) return;
+
+        bool found = mainVm.Chat.Messages.Any(m => m.Model.Id == targetId);
+
+        if (!found)
+        {
+            string serverUrl = ResolveServerUrl();
+            string channelName = mainVm.Chat.CurrentChannelName;
+            if (string.IsNullOrEmpty(serverUrl) || string.IsNullOrEmpty(channelName))
+                return;
+
+            try
+            {
+                List<MessageModel> allMessages = await mainVm.ChannelService.GetHistoryAsync(
+                    serverUrl, channelName, 200, 0);
+
+                if (allMessages.Any(m => m.Id == targetId))
+                {
+                    ChannelViewModel? channelVm = mainVm.Sidebar.GetServer(serverUrl)?.Channels
+                        .FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
+
+                    if (channelVm is not null)
+                    {
+                        HashSet<string> existing = channelVm.Messages.Select(m => m.Model.Id).ToHashSet();
+                        foreach (MessageModel m in allMessages)
+                        {
+                            if (!existing.Contains(m.Id))
+                                channelVm.AddMessage(m);
+                        }
+                    }
+
+                    await Task.Delay(50);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Failed to fetch reply target: {ex.Message}");
+                return;
+            }
+        }
+
+        mainVm.Chat.ScrollToMessageRequested?.Invoke(targetId);
     }
 }

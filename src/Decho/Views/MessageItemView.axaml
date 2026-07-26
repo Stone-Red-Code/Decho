@@ -5,7 +5,18 @@
 			 xmlns:conv="using:Decho.Converters"
 			 x:Class="Decho.Views.MessageItemView"
 			 x:DataType="vm:MessageViewModel">
+	<UserControl.Resources>
+		<conv:BoolToOpacityConverter x:Key="BoolOpacityConverter" />
+	</UserControl.Resources>
 	<Grid Margin="5" ColumnDefinitions="Auto, *">
+		<Border Grid.ColumnSpan="2" Background="#2645a1" IsHitTestVisible="False" CornerRadius="4"
+				Opacity="{Binding IsHighlighted, Converter={StaticResource BoolOpacityConverter}}">
+			<Border.Transitions>
+				<Transitions>
+					<DoubleTransition Property="Opacity" Duration="0:0:0.3" />
+				</Transitions>
+			</Border.Transitions>
+		</Border>
 		<Ellipse VerticalAlignment="Top"
 				 Width="40"
 				 Height="40"
