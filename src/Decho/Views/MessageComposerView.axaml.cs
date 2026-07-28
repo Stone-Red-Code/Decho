@@ -3,6 +3,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Avalonia.SpellChecker;
 
 using Decho.Models;
 using Decho.ViewModels;
@@ -15,6 +16,8 @@ namespace Decho.Views;
 
 public partial class MessageComposerView : UserControl
 {
+    private readonly TextBoxSpellChecker _spellChecker;
+
     public MessageComposerView()
     {
         InitializeComponent();
@@ -25,6 +28,9 @@ public partial class MessageComposerView : UserControl
 
         // Intercept Enter before the TextBox processes it (AcceptsReturn=True would insert a newline)
         MessageTextBox.AddHandler(InputElement.KeyDownEvent, OnTextBoxTunnelingKeyDown, RoutingStrategies.Tunnel);
+
+        _spellChecker = new TextBoxSpellChecker(SpellCheckerConfig.Create("en_GB"));
+        _spellChecker.Initialize(MessageTextBox);
     }
 
     private void OnDataContextChanged(object? sender, EventArgs e)
