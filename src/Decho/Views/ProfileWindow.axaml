@@ -10,7 +10,7 @@
         MinHeight="280"
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
-        Icon="/Assets/avalonia-logo.ico">
+        Icon="/Assets/Decho.ico">
     <Border Padding="15">
         <DockPanel>
             <Button DockPanel.Dock="Bottom"

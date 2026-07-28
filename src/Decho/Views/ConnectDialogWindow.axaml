@@ -11,7 +11,7 @@
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         CanResize="False"
-        Icon="/Assets/avalonia-logo.ico">
+        Icon="/Assets/Decho.ico">
     <Border Padding="15">
         <StackPanel Spacing="8">
             <TextBlock Text="Server URL:" FontWeight="SemiBold" />
