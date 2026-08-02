@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -29,6 +30,11 @@ public partial class MessageComposerView : UserControl
         // Intercept Enter before the TextBox processes it (AcceptsReturn=True would insert a newline)
         MessageTextBox.AddHandler(InputElement.KeyDownEvent, OnTextBoxTunnelingKeyDown, RoutingStrategies.Tunnel);
 
+        MessageTextBox.GetObservable(TextBox.TextProperty)
+            .Subscribe(_ => UpdateAutocomplete(MessageTextBox.Text ?? string.Empty, MessageTextBox.CaretIndex));
+        MessageTextBox.GetObservable(TextBox.CaretIndexProperty)
+            .Subscribe(_ => UpdateAutocomplete(MessageTextBox.Text ?? string.Empty, MessageTextBox.CaretIndex));
+
         _spellChecker = new TextBoxSpellChecker(SpellCheckerConfig.Create("en_GB"));
         _spellChecker.Initialize(MessageTextBox);
     }
@@ -45,6 +51,12 @@ public partial class MessageComposerView : UserControl
                 }
             };
         }
+    }
+
+    private void UpdateAutocomplete(string text, int caretIndex)
+    {
+        MessageComposerViewModel? vm = this.GetDataContext<MessageComposerViewModel>();
+        vm?.UpdateAutocomplete(text, caretIndex);
     }
 
     private void OnTextBoxKeyDown(object? sender, KeyEventArgs e)
@@ -137,8 +149,11 @@ public partial class MessageComposerView : UserControl
             return;
         }
 
-        vm.InsertAutocomplete(item);
-        MessageTextBox.CaretIndex = MessageTextBox.Text?.Length ?? 0;
+        int newCaret = vm.InsertAutocomplete(item);
+        if (newCaret >= 0)
+        {
+            MessageTextBox.CaretIndex = newCaret;
+        }
         _ = MessageTextBox.Focus();
     }
 

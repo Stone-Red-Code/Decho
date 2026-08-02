@@ -31,7 +31,9 @@ public sealed class AutocompleteController(IEnumerable<AutocompleteProvider> pro
 
     public int TriggerCharIndex { get; private set; }
 
-    public void Update(string text)
+    public int WordEndIndex { get; private set; }
+
+    public void Update(string text, int caretIndex)
     {
         if (string.IsNullOrEmpty(text) || _providers.Count == 0)
         {
@@ -39,7 +41,8 @@ public sealed class AutocompleteController(IEnumerable<AutocompleteProvider> pro
             return;
         }
 
-        Match match = TriggerPattern.Match(text);
+        int clampedCaret = Math.Clamp(caretIndex, 0, text.Length);
+        Match match = TriggerPattern.Match(text[..clampedCaret]);
         if (!match.Success)
         {
             Reset();
@@ -58,6 +61,7 @@ public sealed class AutocompleteController(IEnumerable<AutocompleteProvider> pro
         ActiveProvider = provider;
         FilterText = filter;
         TriggerCharIndex = match.Index;
+        WordEndIndex = match.Index + match.Length;
 
         List<string> items = provider.ItemsSource().ToList();
         List<string> filtered = items

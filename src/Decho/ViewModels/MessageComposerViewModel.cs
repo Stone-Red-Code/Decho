@@ -106,8 +106,6 @@ public sealed class MessageComposerViewModel : ViewModelBase
                     (draft, hasFiles, isReadOnly) =>
                     (!string.IsNullOrWhiteSpace(draft) || hasFiles) && !isReadOnly);
         SendCommand = ReactiveCommand.Create(Send, canSend);
-
-        _ = this.WhenAnyValue(x => x.Draft).Subscribe(OnDraftChanged);
     }
 
     public void UpdateAvailableUsers(IEnumerable<UserViewModel> users)
@@ -179,17 +177,24 @@ public sealed class MessageComposerViewModel : ViewModelBase
         return _commandHandler?.IsCommand(input) ?? input.StartsWith('/');
     }
 
-    public void InsertAutocomplete(string item)
+    public int InsertAutocomplete(string item)
     {
         string? insertion = Autocomplete.GetInsertion(item);
         if (insertion is null)
         {
-            return;
+            return -1;
         }
 
         string before = Draft[..Autocomplete.TriggerCharIndex];
-        Draft = $"{before}{insertion}";
+        string after = Draft[Autocomplete.WordEndIndex..];
+        if (after.Length > 0 && char.IsWhiteSpace(after[0]))
+        {
+            insertion = insertion.TrimEnd();
+        }
+
+        Draft = $"{before}{insertion}{after}";
         Autocomplete.Reset();
+        return before.Length + insertion.Length;
     }
 
     public void ClearReplyTarget()
@@ -226,8 +231,8 @@ public sealed class MessageComposerViewModel : ViewModelBase
             : string.Empty;
     }
 
-    private void OnDraftChanged(string? draft)
+    public void UpdateAutocomplete(string text, int caretIndex)
     {
-        Autocomplete.Update(draft ?? string.Empty);
+        Autocomplete.Update(text, caretIndex);
     }
 }
