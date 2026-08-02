@@ -202,6 +202,11 @@ public sealed class MessageComposerViewModel : ViewModelBase
         ReplyTarget = null;
     }
 
+    public void UpdateAutocomplete(string text, int caretIndex)
+    {
+        Autocomplete.Update(text, caretIndex);
+    }
+
     internal void Send()
     {
         string text = Draft.Trim();
@@ -229,10 +234,5 @@ public sealed class MessageComposerViewModel : ViewModelBase
         StagedFilesSummary = StagedFiles.Count > 0
             ? $"{StagedFiles.Count} file(s) staged"
             : string.Empty;
-    }
-
-    public void UpdateAutocomplete(string text, int caretIndex)
-    {
-        Autocomplete.Update(text, caretIndex);
     }
 }

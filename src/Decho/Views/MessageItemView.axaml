@@ -50,10 +50,10 @@
 					   Opacity="0.5"
 					   IsVisible="{Binding HasReply}"
 					   PointerPressed="OnReplyQuotePointerPressed" />
-			<TextBlock x:Name="MessageContent"
-					   VerticalAlignment="Top"
-					   TextWrapping="Wrap"
-					   IsVisible="{Binding ShowContent}" />
+			<SelectableTextBlock x:Name="MessageContent"
+								 VerticalAlignment="Top"
+								 TextWrapping="Wrap"
+								 IsVisible="{Binding ShowContent}" />
 			<ItemsControl ItemsSource="{Binding Attachments}"
 						  IsVisible="{Binding HasAttachments}"
 						  Margin="0 4 0 0">

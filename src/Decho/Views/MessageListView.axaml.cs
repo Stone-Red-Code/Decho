@@ -17,10 +17,70 @@ public partial class MessageListView : UserControl
     private bool _loadingMore;
     private double _loadingMoreExtent;
 
+    private MessageViewModel? _highlightedMessage;
+
+    private CancellationTokenSource? _highlightCts;
+
     public MessageListView()
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
+    }
+
+    public void ScrollToMessage(string messageId)
+    {
+        if (_chat is null) return;
+
+        MessageViewModel? target = _chat.Messages.FirstOrDefault(m => m.Model.Id == messageId);
+        if (target is null) return;
+
+        ScrollViewer? scroll = this.FindControl<ScrollViewer>("MessageScrollViewer");
+        if (scroll is null) return;
+
+        ClearHighlight();
+        target.IsHighlighted = true;
+        _highlightedMessage = target;
+        _highlightCts = new CancellationTokenSource();
+        CancellationToken ct = _highlightCts.Token;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            double? targetY = FindItemY(scroll, target);
+            if (targetY is not null)
+                scroll.Offset = new Vector(scroll.Offset.X, targetY.Value);
+        }, DispatcherPriority.Render);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(2000, ct);
+                Dispatcher.UIThread.Post(() =>
+                {
+                    target.IsHighlighted = false;
+                    if (_highlightedMessage == target)
+                        _highlightedMessage = null;
+                });
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        });
+    }
+
+    private static double? FindItemY(Visual parent, MessageViewModel target)
+    {
+        foreach (Visual child in parent.GetVisualChildren())
+        {
+            if (child.DataContext == target)
+                return child.Bounds.Y;
+
+            double? result = FindItemY(child, target);
+            if (result.HasValue)
+                return result;
+        }
+
+        return null;
     }
 
     private void OnDataContextChanged(object? sender, EventArgs args)
@@ -141,65 +201,6 @@ public partial class MessageListView : UserControl
         _wasAtBottom = true;
         Dispatcher.UIThread.Post(scroll.ScrollToEnd, DispatcherPriority.Background);
     }
-
-    public void ScrollToMessage(string messageId)
-    {
-        if (_chat is null) return;
-
-        MessageViewModel? target = _chat.Messages.FirstOrDefault(m => m.Model.Id == messageId);
-        if (target is null) return;
-
-        ScrollViewer? scroll = this.FindControl<ScrollViewer>("MessageScrollViewer");
-        if (scroll is null) return;
-        
-        ClearHighlight();
-        target.IsHighlighted = true;
-        _highlightedMessage = target;
-        _highlightCts = new CancellationTokenSource();
-        CancellationToken ct = _highlightCts.Token;
-
-        Dispatcher.UIThread.Post(() =>
-        {
-            double? targetY = FindItemY(scroll, target);
-            if (targetY is not null)
-                scroll.Offset = new Vector(scroll.Offset.X, targetY.Value);
-        }, DispatcherPriority.Render);
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await Task.Delay(2000, ct);
-                Dispatcher.UIThread.Post(() =>
-                {
-                    target.IsHighlighted = false;
-                    if (_highlightedMessage == target)
-                        _highlightedMessage = null;
-                });
-            }
-            catch (OperationCanceledException)
-            {
-            }
-        });
-    }
-
-    private static double? FindItemY(Visual parent, MessageViewModel target)
-    {
-        foreach (Visual child in parent.GetVisualChildren())
-        {
-            if (child.DataContext == target)
-                return child.Bounds.Y;
-
-            double? result = FindItemY(child, target);
-            if (result.HasValue)
-                return result;
-        }
-
-        return null;
-    }
-
-    private MessageViewModel? _highlightedMessage;
-    private CancellationTokenSource? _highlightCts;
 
     private void ClearHighlight()
     {

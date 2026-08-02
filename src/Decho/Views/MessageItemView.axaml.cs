@@ -117,7 +117,7 @@ public partial class MessageItemView : UserControl
 
     private void BuildMessageInlines(string content)
     {
-        TextBlock? tb = MessageContent;
+        SelectableTextBlock? tb = MessageContent;
         if (tb is null)
         {
             return;
