@@ -127,7 +127,7 @@ public sealed class ChannelViewModel(ChannelModel model) : ViewModelBase
     public void InsertMessages(IList<MessageModel> olderMessages)
     {
         HashSet<string> existingIds = Messages.Select(m => m.Model.Id).ToHashSet();
-        List<MessageModel> fresh = olderMessages.Where(m => !existingIds.Contains(m.Id)).ToList();
+        List<MessageModel> fresh = olderMessages.Where(m => !existingIds.Contains(m.Id)).Reverse().ToList();
         if (fresh.Count == 0)
         {
             return;
