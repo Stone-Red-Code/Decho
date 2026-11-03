@@ -58,6 +58,7 @@ public partial class App : Application
         Locator.CurrentMutable.RegisterLazySingleton<IChannelService>(() => channelService);
 
         Locator.CurrentMutable.RegisterConstant<IClipboardAttachmentReader>(new ClipboardAttachmentReader());
+        Locator.CurrentMutable.RegisterConstant<IReadPositionStore>(new ReadPositionStore());
 
         IAvatarService avatarService = new AvatarService(store);
         Locator.CurrentMutable.RegisterLazySingleton<IAvatarService>(() => avatarService);
@@ -86,6 +87,7 @@ public partial class App : Application
                 Locator.Current.GetService<IInviteService>()!,
                 Locator.Current.GetService<CommandHandler>()!,
                 Locator.Current.GetService<NotificationSoundService>()!,
-                Locator.Current.GetService<OsNotificationService>()!));
+                Locator.Current.GetService<OsNotificationService>()!,
+                Locator.Current.GetService<IReadPositionStore>()!));
     }
 }

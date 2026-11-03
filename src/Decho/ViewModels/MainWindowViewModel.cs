@@ -29,7 +29,10 @@ public sealed class MainWindowViewModel : ViewModelBase
     private readonly CommandHandler _commandHandler;
     private readonly NotificationSoundService _notificationService;
     private readonly OsNotificationService _osNotificationService;
+    private readonly IReadPositionStore _readPositions;
     private Window? _mainWindow;
+    private ChannelViewModel? _openChannel;
+    private string _openChannelServerUrl = string.Empty;
 
     public string Title { get; } = "Decho";
 
@@ -47,7 +50,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     public ReactiveCommand<Unit, Unit> AddServerCommand { get; }
 
-    public MainWindowViewModel(IConnectionService connectionService, IChannelService channelService, IUserService userService, IInviteService inviteService, CommandHandler commandHandler, NotificationSoundService notificationService, OsNotificationService osNotificationService)
+    public MainWindowViewModel(IConnectionService connectionService, IChannelService channelService, IUserService userService, IInviteService inviteService, CommandHandler commandHandler, NotificationSoundService notificationService, OsNotificationService osNotificationService, IReadPositionStore readPositions)
     {
         ConnectionService = connectionService;
         ChannelService = channelService;
@@ -56,6 +59,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         _commandHandler = commandHandler;
         _notificationService = notificationService;
         _osNotificationService = osNotificationService;
+        _readPositions = readPositions;
 
         Sidebar = new SidebarViewModel();
         Chat = new ChatViewModel();
@@ -82,6 +86,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     public void Dispose()
     {
+        SaveOpenChannelReadPosition();
         Chat.Composer.ClearStagedFiles();
         ConnectionService.Dispose();
     }
@@ -149,10 +154,14 @@ public sealed class MainWindowViewModel : ViewModelBase
         }
 
         string? refreshToken = ConnectionService.GetRefreshToken(result.ServerUrl);
+        SavedServer? existingServer = ConfigManager.Load().SavedServers.FirstOrDefault(s =>
+            string.Equals(s.Url, result.ServerUrl, StringComparison.OrdinalIgnoreCase));
         SavedServer savedServer = new SavedServer
         {
             Name = new Uri(result.ServerUrl).Host,
             Url = result.ServerUrl,
+            LeftChannels = existingServer?.LeftChannels ?? [],
+            LastReadMessages = existingServer?.LastReadMessages ?? [],
             Username = result.Username,
             RefreshToken = result.RememberMe ? refreshToken : null,
             RememberMe = result.RememberMe,
@@ -855,6 +864,8 @@ public sealed class MainWindowViewModel : ViewModelBase
             // Posted because stopping it from inside its own event handler is not safe.
             Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
             {
+                SaveOpenChannelReadPosition();
+
                 try
                 {
                     await ConnectionService.DisconnectAsync(serverUrl);
@@ -1238,8 +1249,21 @@ public sealed class MainWindowViewModel : ViewModelBase
         }
     }
 
+    private void SaveOpenChannelReadPosition()
+    {
+        if (_openChannel is not null && _openChannel.MarkAllRead() && _openChannel.LastReadMessageId is { } messageId)
+        {
+            _readPositions.Save(_openChannelServerUrl, _openChannel.Name, messageId);
+        }
+    }
+
     private void HandleChannelSelected(ChannelViewModel? channel)
     {
+        // Leaving a channel uses up its marker, so the next unread messages get a fresh one.
+        SaveOpenChannelReadPosition();
+        _openChannel?.ClearUnreadMarker();
+        _openChannel = channel;
+
         if (channel is null)
         {
             Chat.SetChannel(null);
@@ -1249,6 +1273,8 @@ public sealed class MainWindowViewModel : ViewModelBase
         channel.ClearUnread();
 
         string serverUrl = FindServerUrlForChannel(channel);
+        _openChannelServerUrl = serverUrl;
+        channel.LastReadMessageId ??= _readPositions.Get(serverUrl, channel.Name);
         bool isServerConnected = Sidebar.GetServer(serverUrl)?.IsConnected ?? false;
         Chat.SetChannel(channel, serverUrl, isServerConnected);
 
@@ -1318,6 +1344,12 @@ public sealed class MainWindowViewModel : ViewModelBase
                             foreach (var msg in joinResult.History.Where(msg => !existingIds.Contains(msg.Id)))
                             {
                                 channel.AddMessage(msg);
+                            }
+
+                            if (ReferenceEquals(_openChannel, channel)
+                                && channel.PlaceUnreadMarker(UserService.GetCurrentUsername(serverUrl)) is { } marker)
+                            {
+                                Chat.RevealMessageRequested?.Invoke(marker.Model.Id);
                             }
                         });
 
@@ -1444,6 +1476,8 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     private async Task HandleServerDisconnectRequested(ServerViewModel serverVm)
     {
+        SaveOpenChannelReadPosition();
+
         try
         {
             await ConnectionService.DisconnectAsync(serverVm.ServerUrl);

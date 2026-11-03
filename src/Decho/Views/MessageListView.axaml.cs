@@ -11,6 +11,8 @@ namespace Decho.Views;
 
 public partial class MessageListView : UserControl
 {
+    private const double RevealMargin = 40;
+
     private ChatViewModel? _chat;
     private bool _hasPendingScroll;
     private bool _wasAtBottom;
@@ -68,6 +70,29 @@ public partial class MessageListView : UserControl
         });
     }
 
+    /// <summary>Scrolls to a message without highlighting it, unless it is already in view.</summary>
+    public void RevealMessage(string messageId)
+    {
+        MessageViewModel? target = _chat?.Messages.FirstOrDefault(m => m.Model.Id == messageId);
+        ScrollViewer? scroll = this.FindControl<ScrollViewer>("MessageScrollViewer");
+        if (target is null || scroll is null) return;
+
+        // Set now so that layout from the newly added messages doesn't scroll back to the end.
+        _wasAtBottom = false;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            double? targetY = FindItemY(scroll, target);
+            if (targetY is null) return;
+
+            bool isInView = targetY >= scroll.Offset.Y && targetY + RevealMargin <= scroll.Offset.Y + scroll.Viewport.Height;
+            if (!isInView)
+            {
+                scroll.Offset = new Vector(scroll.Offset.X, Math.Max(targetY.Value - RevealMargin, 0));
+            }
+        }, DispatcherPriority.Background);
+    }
+
     private static double? FindItemY(Visual parent, MessageViewModel target)
     {
         foreach (Visual child in parent.GetVisualChildren())
@@ -91,6 +116,7 @@ public partial class MessageListView : UserControl
             _chat.PropertyChanged -= OnViewModelPropertyChanged;
             _chat.LoadMoreRequested -= OnLoadMoreRequested;
             _chat.ScrollToMessageRequested -= ScrollToMessage;
+            _chat.RevealMessageRequested -= RevealMessage;
         }
 
         ScrollViewer? scroll = this.FindControl<ScrollViewer>("MessageScrollViewer");
@@ -103,6 +129,7 @@ public partial class MessageListView : UserControl
             _chat.PropertyChanged += OnViewModelPropertyChanged;
             _chat.LoadMoreRequested += OnLoadMoreRequested;
             _chat.ScrollToMessageRequested += ScrollToMessage;
+            _chat.RevealMessageRequested += RevealMessage;
             scroll?.ScrollChanged += OnScrollChanged;
         }
     }

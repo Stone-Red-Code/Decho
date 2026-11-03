@@ -62,6 +62,12 @@ public sealed class MessageViewModel(MessageModel model) : ViewModelBase
 
     public bool ShowContent => !string.IsNullOrEmpty(Content);
 
+    public bool ShowUnreadMarker
+    {
+        get;
+        set => this.RaiseAndSetIfChanged(ref field, value);
+    }
+
     public bool IsHighlighted
     {
         get;

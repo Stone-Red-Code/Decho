@@ -6,6 +6,8 @@ namespace Decho.ViewModels;
 
 public sealed class ChannelViewModel(ChannelModel model) : ViewModelBase
 {
+    private MessageViewModel? _unreadMarker;
+
     public ChannelModel Model { get; } = model;
 
     public string Name => Model.Name;
@@ -97,6 +99,46 @@ public sealed class ChannelViewModel(ChannelModel model) : ViewModelBase
     public ObservableCollection<MessageViewModel> Messages { get; } = new ObservableCollection<MessageViewModel>(
             model.Messages.Select(message => new MessageViewModel(message)));
 
+    public string? LastReadMessageId { get; set; }
+
+    /// <summary>Puts the marker above the first message from someone else since the last read one.</summary>
+    public MessageViewModel? PlaceUnreadMarker(string? currentUsername)
+    {
+        ClearUnreadMarker();
+
+        int lastRead = LastReadMessageId is null
+            ? -1
+            : Messages.ToList().FindIndex(m => m.Model.Id == LastReadMessageId);
+        if (lastRead < 0)
+        {
+            return null;
+        }
+
+        _unreadMarker = Messages.Skip(lastRead + 1).FirstOrDefault(m =>
+            !m.Model.IsLocal && !string.Equals(m.AuthorUsername, currentUsername, StringComparison.OrdinalIgnoreCase));
+        _unreadMarker?.ShowUnreadMarker = true;
+        return _unreadMarker;
+    }
+
+    public void ClearUnreadMarker()
+    {
+        _unreadMarker?.ShowUnreadMarker = false;
+        _unreadMarker = null;
+    }
+
+    /// <summary>Returns true when the read position moved.</summary>
+    public bool MarkAllRead()
+    {
+        string? newest = Messages.LastOrDefault(m => !m.Model.IsLocal)?.Model.Id;
+        if (newest is null || newest == LastReadMessageId)
+        {
+            return false;
+        }
+
+        LastReadMessageId = newest;
+        return true;
+    }
+
     public void IncrementUnread(bool isMention = false)
     {
         UnreadCount++;
@@ -114,6 +156,7 @@ public sealed class ChannelViewModel(ChannelModel model) : ViewModelBase
 
     public void ClearMessages()
     {
+        _unreadMarker = null;
         Model.Messages.Clear();
         Messages.Clear();
     }
@@ -129,6 +172,21 @@ public sealed class ChannelViewModel(ChannelModel model) : ViewModelBase
         MessageViewModel? message = Messages.FirstOrDefault(m => m.Model.Id == messageId);
         if (message is not null)
         {
+            int index = Messages.IndexOf(message);
+
+            // Keep the read position and marker on messages that still exist.
+            if (messageId == LastReadMessageId)
+            {
+                LastReadMessageId = Messages.Take(index).LastOrDefault(m => !m.Model.IsLocal)?.Model.Id;
+            }
+
+            if (ReferenceEquals(message, _unreadMarker))
+            {
+                ClearUnreadMarker();
+                _unreadMarker = Messages.Skip(index + 1).FirstOrDefault(m => !m.Model.IsLocal);
+                _unreadMarker?.ShowUnreadMarker = true;
+            }
+
             _ = Model.Messages.Remove(message.Model);
             _ = Messages.Remove(message);
         }

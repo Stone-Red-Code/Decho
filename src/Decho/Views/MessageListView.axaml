@@ -8,7 +8,21 @@
         <ItemsControl ItemsSource="{Binding Messages}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:MessageViewModel">
-                    <views:MessageItemView />
+                    <StackPanel>
+                        <Grid ColumnDefinitions="*, Auto, *"
+                              Margin="5 4"
+                              IsVisible="{Binding ShowUnreadMarker}">
+                            <Border Height="1" Background="#E68C3C" />
+                            <TextBlock Grid.Column="1"
+                                       Text="New messages"
+                                       Foreground="#E68C3C"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       Margin="8 0" />
+                            <Border Grid.Column="2" Height="1" Background="#E68C3C" />
+                        </Grid>
+                        <views:MessageItemView />
+                    </StackPanel>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>

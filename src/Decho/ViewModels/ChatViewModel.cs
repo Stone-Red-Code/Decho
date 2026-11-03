@@ -11,6 +11,8 @@ public sealed class ChatViewModel : ViewModelBase
 
     public Action<string>? ScrollToMessageRequested;
 
+    public Action<string>? RevealMessageRequested;
+
     public ObservableCollection<MessageViewModel> Messages
     {
         get;
