@@ -48,6 +48,8 @@
     <ProjectReference Include="..\EchoHub\src\EchoHub.Client\EchoHub.Client.csproj">
       <AdditionalProperties>DirectoryBuildPropsPath=$(MSBuildProjectDirectory)\Decho.Build.props</AdditionalProperties>
     </ProjectReference>
-    <ProjectReference Include="..\EchoHub\src\EchoHub.Core\EchoHub.Core.csproj" />
+    <ProjectReference Include="..\EchoHub\src\EchoHub.Core\EchoHub.Core.csproj">
+      <AdditionalProperties>DirectoryBuildPropsPath=$(MSBuildProjectDirectory)\Decho.Build.props</AdditionalProperties>
+    </ProjectReference>
   </ItemGroup>
 </Project>
