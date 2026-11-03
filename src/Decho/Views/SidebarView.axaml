@@ -51,6 +51,9 @@
 												<MenuItem Header="Remove Server"
 														  Command="{Binding RemoveCommand}" />
 												<Separator IsVisible="{Binding IsConnected}" />
+												<MenuItem Header="My Profile"
+														  Command="{Binding ProfileCommand}"
+														  IsVisible="{Binding IsConnected}" />
 												<MenuItem Header="Create Channel"
 														  Command="{Binding CreateChannelCommand}"
 														  IsVisible="{Binding IsConnected}" />

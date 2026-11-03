@@ -6,7 +6,7 @@ public sealed class UserModel(string id, string displayName, string? nicknameCol
 {
     public string Id { get; } = id;
 
-    public string DisplayName { get; } = displayName;
+    public string DisplayName { get; set; } = displayName;
 
     public string? NicknameColor { get; set; } = nicknameColor;
 

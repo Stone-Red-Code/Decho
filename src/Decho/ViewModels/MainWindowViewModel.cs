@@ -110,7 +110,8 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            ProfileWindow dialog = new ProfileWindow(profile, serverUrl);
+            bool isOwnProfile = string.Equals(profile.Username, UserService.GetAccountUsername(serverUrl), StringComparison.OrdinalIgnoreCase);
+            ProfileWindow dialog = new ProfileWindow(profile, serverUrl, UserService, isOwnProfile);
             await dialog.ShowDialog(_mainWindow);
         });
     }
@@ -658,6 +659,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             serverVm.RemoveRequested += () => HandleServerRemoveRequested(serverVm);
             serverVm.CreateChannelRequested += () => HandleCreateChannelRequested(serverVm);
             serverVm.DeleteChannelRequested += () => HandleDeleteChannelRequested(serverVm);
+            serverVm.ProfileRequested += () => HandleProfileRequested(serverVm);
             _ = serverVm.WhenAnyValue(s => s.SelectedChannel)
                 .Where(channel => channel is not null)
                 .Subscribe(channel => Sidebar.SelectedChannel = channel!);
@@ -923,6 +925,15 @@ public sealed class MainWindowViewModel : ViewModelBase
                 Debug.WriteLine($"Send failed: {ex.Message}");
             }
         });
+    }
+
+    private async Task HandleProfileRequested(ServerViewModel server)
+    {
+        string? username = UserService.GetAccountUsername(server.ServerUrl);
+        if (!string.IsNullOrEmpty(username))
+        {
+            await ShowProfileAsync(server.ServerUrl, username);
+        }
     }
 
     private async Task HandleCreateChannelRequested(ServerViewModel server)

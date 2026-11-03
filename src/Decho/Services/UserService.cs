@@ -36,7 +36,12 @@ internal sealed class UserService : IUserService
         ServerConnection? entry = _store.Get(serverUrl);
         if (entry is null) return;
 
-        _ = await entry.ApiClient.UpdateProfileAsync(new UpdateProfileRequest(displayName, bio, nickColor));
+        UserProfileDto? updated = await entry.ApiClient.UpdateProfileAsync(new UpdateProfileRequest(displayName, bio, nickColor));
+        if (updated is not null)
+        {
+            entry.User.DisplayName = updated.DisplayName ?? updated.Username;
+            entry.User.NicknameColor = updated.NicknameColor;
+        }
     }
 
     public async Task SetAvatarAsync(string serverUrl, string target)

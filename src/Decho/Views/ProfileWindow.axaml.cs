@@ -1,21 +1,33 @@
 using Avalonia.Controls;
 using Avalonia.Media;
 
+using Decho.Services;
+
 using EchoHub.Core.DTOs;
 using EchoHub.Core.Models;
+
+using System.Diagnostics;
 
 namespace Decho.Views;
 
 public sealed partial class ProfileWindow : Window
 {
+    private readonly string _serverUrl = string.Empty;
+    private readonly IUserService? _userService;
+    private UserProfileDto? _profile;
+
     public ProfileWindow()
     {
         InitializeComponent();
     }
 
-    public ProfileWindow(UserProfileDto profile, string serverUrl)
+    public ProfileWindow(UserProfileDto profile, string serverUrl, IUserService userService, bool isOwnProfile)
     {
         InitializeComponent();
+
+        _serverUrl = serverUrl;
+        _userService = userService;
+        EditButton.IsVisible = isOwnProfile;
 
         Title = $"Profile - {profile.Username}";
         Avatar.ServerUrl = serverUrl;
@@ -24,7 +36,7 @@ public sealed partial class ProfileWindow : Window
         ShowProfile(profile);
     }
 
-    private static string FormatStatus(UserStatus status)
+    internal static string FormatStatus(UserStatus status)
     {
         return status switch
         {
@@ -38,6 +50,8 @@ public sealed partial class ProfileWindow : Window
 
     private void ShowProfile(UserProfileDto profile)
     {
+        _profile = profile;
+
         Avatar.FallbackName = profile.DisplayName;
         UsernameText.Text = profile.Username;
 
@@ -89,6 +103,34 @@ public sealed partial class ProfileWindow : Window
             ServerRole.Member => "Member",
             _ => role.ToString(),
         };
+    }
+
+    private async void OnEditClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (_profile is null || _userService is null)
+        {
+            return;
+        }
+
+        EditProfileWindow dialog = new EditProfileWindow(_profile, _serverUrl, _userService);
+        bool saved = await dialog.ShowDialog<bool>(this);
+        if (!saved)
+        {
+            return;
+        }
+
+        try
+        {
+            UserProfileDto? updated = await _userService.GetUserProfileAsync(_serverUrl, _profile.Username);
+            if (updated is not null)
+            {
+                ShowProfile(updated);
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to reload profile: {ex.Message}");
+        }
     }
 
     private void OnCloseClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)

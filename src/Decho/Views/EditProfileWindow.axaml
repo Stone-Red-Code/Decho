@@ -1,0 +1,51 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="using:Decho.Views"
+        x:Class="Decho.Views.EditProfileWindow"
+        Title="Edit Profile"
+        Width="420"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Icon="/Assets/Decho.ico">
+    <StackPanel Margin="15" Spacing="8">
+        <Grid ColumnDefinitions="Auto, 12, *">
+            <views:AvatarView x:Name="AvatarPreview" Width="80" Height="80" />
+            <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="4">
+                <Button Content="Change picture..." Click="OnChangePictureClicked" />
+                <TextBlock Text="JPEG, PNG, GIF or WebP. Cropped to a square and shown at low resolution."
+                           FontSize="11"
+                           Opacity="0.7"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+        </Grid>
+
+        <TextBlock Text="Display name" FontWeight="SemiBold" />
+        <TextBox x:Name="DisplayNameBox" />
+
+        <TextBlock Text="Bio" FontWeight="SemiBold" />
+        <TextBox x:Name="BioBox" AcceptsReturn="True" TextWrapping="Wrap" Height="80" />
+
+        <TextBlock Text="Name color" FontWeight="SemiBold" />
+        <Grid ColumnDefinitions="*, 8, Auto">
+            <TextBox x:Name="ColorBox" Watermark="#FF5500" TextChanged="OnColorTextChanged" />
+            <Border x:Name="ColorSwatch" Grid.Column="2"
+                    Width="24" Height="24" CornerRadius="3"
+                    BorderThickness="1" BorderBrush="{DynamicResource UiTheme08}" />
+        </Grid>
+
+        <TextBlock Text="Status" FontWeight="SemiBold" />
+        <ComboBox x:Name="StatusBox" HorizontalAlignment="Stretch" />
+        <TextBox x:Name="StatusMessageBox" Watermark="Status message (optional)" />
+
+        <TextBlock x:Name="ErrorText"
+                   Foreground="IndianRed"
+                   TextWrapping="Wrap"
+                   IsVisible="False" />
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0 4 0 0">
+            <Button Content="Cancel" IsCancel="True" Click="OnCancelClicked" />
+            <Button x:Name="SaveButton" Content="Save" IsDefault="True" Click="OnSaveClicked" />
+        </StackPanel>
+    </StackPanel>
+</Window>

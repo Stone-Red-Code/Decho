@@ -37,6 +37,12 @@ public sealed class ServerViewModel : ViewModelBase
         remove => _deleteChannelRequested = (Func<Task>?)Delegate.Remove(_deleteChannelRequested, value);
     }
 
+    public event Func<Task>? ProfileRequested
+    {
+        add => _profileRequested = (Func<Task>?)Delegate.Combine(_profileRequested, value);
+        remove => _profileRequested = (Func<Task>?)Delegate.Remove(_profileRequested, value);
+    }
+
     private bool _isConnected;
     private bool _isConnecting;
     private string? _connectedUser;
@@ -50,6 +56,8 @@ public sealed class ServerViewModel : ViewModelBase
     private Func<Task>? _createChannelRequested;
 
     private Func<Task>? _deleteChannelRequested;
+
+    private Func<Task>? _profileRequested;
 
     public ServerModel Model { get; }
 
@@ -68,6 +76,8 @@ public sealed class ServerViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> CreateChannelCommand { get; }
 
     public ReactiveCommand<Unit, Unit> DeleteChannelCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> ProfileCommand { get; }
 
     public ChannelViewModel? SelectedChannel
     {
@@ -158,6 +168,7 @@ public sealed class ServerViewModel : ViewModelBase
         RemoveCommand = ReactiveCommand.CreateFromTask(RemoveAsync);
         CreateChannelCommand = ReactiveCommand.CreateFromTask(CreateChannelAsync);
         DeleteChannelCommand = ReactiveCommand.CreateFromTask(DeleteChannelAsync);
+        ProfileCommand = ReactiveCommand.CreateFromTask(OpenProfileAsync);
     }
 
     public void SyncFromModel()
@@ -205,6 +216,14 @@ public sealed class ServerViewModel : ViewModelBase
         if (_deleteChannelRequested is not null)
         {
             await _deleteChannelRequested();
+        }
+    }
+
+    private async Task OpenProfileAsync()
+    {
+        if (_profileRequested is not null)
+        {
+            await _profileRequested();
         }
     }
 }

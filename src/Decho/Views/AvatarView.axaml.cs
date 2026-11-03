@@ -49,6 +49,13 @@ public partial class AvatarView : UserControl
         SizeChanged += (_, args) => InitialText.FontSize = Math.Max(args.NewSize.Height * 0.45, 1);
     }
 
+    /// <summary>Shows an image directly, such as a picture that has not been uploaded yet.</summary>
+    public void ShowPreview(Bitmap bitmap)
+    {
+        _loadVersion++;
+        SetPicture(bitmap);
+    }
+
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
