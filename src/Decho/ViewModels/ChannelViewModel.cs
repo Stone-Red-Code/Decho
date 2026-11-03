@@ -4,11 +4,20 @@ using System.Collections.ObjectModel;
 
 namespace Decho.ViewModels;
 
-public sealed class ChannelViewModel(ChannelModel model) : ViewModelBase
+public sealed class ChannelViewModel : ViewModelBase
 {
     private MessageViewModel? _unreadMarker;
 
-    public ChannelModel Model { get; } = model;
+    public ChannelViewModel(ChannelModel model)
+    {
+        Model = model;
+        Messages = new ObservableCollection<MessageViewModel>(
+            model.Messages.Select(message => new MessageViewModel(message)));
+        Messages.CollectionChanged += (_, _) => UpdateMessageGrouping();
+        UpdateMessageGrouping();
+    }
+
+    public ChannelModel Model { get; }
 
     public string Name => Model.Name;
 
@@ -96,8 +105,7 @@ public sealed class ChannelViewModel(ChannelModel model) : ViewModelBase
 
     public string BadgeText => HasMentions ? MentionCount.ToString() : UnreadCount.ToString();
 
-    public ObservableCollection<MessageViewModel> Messages { get; } = new ObservableCollection<MessageViewModel>(
-            model.Messages.Select(message => new MessageViewModel(message)));
+    public ObservableCollection<MessageViewModel> Messages { get; }
 
     public string? LastReadMessageId { get; set; }
 
@@ -137,6 +145,16 @@ public sealed class ChannelViewModel(ChannelModel model) : ViewModelBase
 
         LastReadMessageId = newest;
         return true;
+    }
+
+    private void UpdateMessageGrouping()
+    {
+        MessageViewModel? previous = null;
+        foreach (MessageViewModel message in Messages)
+        {
+            message.FollowsPreviousMessage = previous is not null && message.CanFollow(previous);
+            previous = message;
+        }
     }
 
     public void IncrementUnread(bool isMention = false)

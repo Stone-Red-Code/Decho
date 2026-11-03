@@ -9,6 +9,8 @@ namespace Decho.ViewModels;
 
 public sealed class MessageViewModel(MessageModel model) : ViewModelBase
 {
+    private static readonly TimeSpan GroupingWindow = TimeSpan.FromMinutes(7);
+
     public MessageModel Model { get; } = model;
 
     public string AuthorName => Model.Author.DisplayName;
@@ -65,7 +67,38 @@ public sealed class MessageViewModel(MessageModel model) : ViewModelBase
     public bool ShowUnreadMarker
     {
         get;
-        set => this.RaiseAndSetIfChanged(ref field, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref field, value);
+            this.RaisePropertyChanged(nameof(IsGroupContinuation));
+        }
+    }
+
+    public bool FollowsPreviousMessage
+    {
+        get;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref field, value);
+            this.RaisePropertyChanged(nameof(IsGroupContinuation));
+        }
+    }
+
+    /// <summary>True when the author's name and picture are hidden because the message above already shows them.</summary>
+    public bool IsGroupContinuation => FollowsPreviousMessage && !ShowUnreadMarker;
+
+    public string ShortTimeText => Model.SentAt.ToLocalTime().ToString("t");
+
+    public bool CanFollow(MessageViewModel previous)
+    {
+        DateTimeOffset sentAt = Model.SentAt.ToLocalTime();
+        DateTimeOffset previousSentAt = previous.Model.SentAt.ToLocalTime();
+
+        return !HasReply
+            && Model.IsLocal == previous.Model.IsLocal
+            && string.Equals(AuthorUsername, previous.AuthorUsername, StringComparison.OrdinalIgnoreCase)
+            && sentAt.Date == previousSentAt.Date
+            && (sentAt - previousSentAt).Duration() <= GroupingWindow;
     }
 
     public bool IsHighlighted

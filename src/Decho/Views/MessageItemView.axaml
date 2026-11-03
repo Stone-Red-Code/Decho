@@ -5,11 +5,29 @@
 			 xmlns:conv="using:Decho.Converters"
 			 xmlns:views="using:Decho.Views"
 			 x:Class="Decho.Views.MessageItemView"
-			 x:DataType="vm:MessageViewModel">
+			 x:DataType="vm:MessageViewModel"
+			 ClipToBounds="False">
 	<UserControl.Resources>
 		<conv:BoolToOpacityConverter x:Key="BoolOpacityConverter" />
 	</UserControl.Resources>
-	<Grid Margin="5" ColumnDefinitions="Auto, *" Background="Transparent">
+	<UserControl.Styles>
+		<Style Selector="Grid.message">
+			<Setter Property="Margin" Value="5 10 5 0" />
+		</Style>
+		<Style Selector="Grid.message.continuation">
+			<Setter Property="Margin" Value="5 0" />
+		</Style>
+		<Style Selector="Grid.message TextBlock.hoverHint">
+			<Setter Property="Opacity" Value="0" />
+		</Style>
+		<Style Selector="Grid.message:pointerover TextBlock.hoverHint">
+			<Setter Property="Opacity" Value="0.5" />
+		</Style>
+	</UserControl.Styles>
+	<Grid Classes="message"
+		  Classes.continuation="{Binding IsGroupContinuation}"
+		  ColumnDefinitions="44, *"
+		  Background="Transparent">
 		<Grid.ContextMenu>
 			<ContextMenu Opening="OnContextMenuOpening">
 				<MenuItem x:Name="ReplyMenuItem" Header="Reply" Click="OnReplyMenuClick" />
@@ -30,18 +48,29 @@
 				</Transitions>
 			</Border.Transitions>
 		</Border>
+		<TextBlock Classes="hoverHint"
+				   IsVisible="{Binding IsGroupContinuation}"
+				   Text="{Binding ShortTimeText}"
+				   FontSize="10"
+				   HorizontalAlignment="Center"
+				   VerticalAlignment="Top"
+				   Margin="0 1 8 -20" />
 		<views:AvatarView VerticalAlignment="Top"
-						  Width="40"
-						  Height="40"
-						  Margin="0 0 8 0"
+						  IsVisible="{Binding !IsGroupContinuation}"
+						  HorizontalAlignment="Left"
+						  Width="36"
+						  Height="36"
+						  Margin="0 0 0 -36"
 						  Cursor="Hand"
 						  Username="{Binding AuthorUsername}"
 						  ServerUrl="{Binding ServerUrl}"
 						  FallbackName="{Binding AuthorName}"
 						  PointerPressed="OnAuthorNamePointerPressed" />
 
-		<StackPanel Grid.Column="1" VerticalAlignment="Top">
-			<StackPanel Orientation="Horizontal" Margin="0 5 0 0">
+		<StackPanel Grid.Column="1" VerticalAlignment="Top" Margin="0 0 20 0">
+			<StackPanel Orientation="Horizontal"
+						Margin="0 2 0 4"
+						IsVisible="{Binding !IsGroupContinuation}">
 				<TextBlock VerticalAlignment="Top"
 						   Text="{Binding AuthorName}"
 						   FontWeight="Bold"
@@ -52,13 +81,6 @@
 						   Text="{Binding TimeText}"
 						   FontSize="10"
 						   Margin="5 0 0 0" />
-				<TextBlock VerticalAlignment="Top"
-						   Text="↩"
-						   FontSize="10"
-						   Margin="5 0 0 0"
-						   Opacity="0.3"
-						   Cursor="Hand"
-						   PointerPressed="OnReplyPointerPressed" />
 			</StackPanel>
 			<TextBlock x:Name="ReplyQuote"
 					   VerticalAlignment="Top"
@@ -127,5 +149,14 @@
 				</ItemsControl.ItemTemplate>
 			</ItemsControl>
 		</StackPanel>
+		<TextBlock Grid.Column="1"
+				   Classes="hoverHint"
+				   Text="↩"
+				   FontSize="10"
+				   HorizontalAlignment="Right"
+				   VerticalAlignment="Top"
+				   Margin="0 1 5 -20"
+				   Cursor="Hand"
+				   PointerPressed="OnReplyPointerPressed" />
 	</Grid>
 </UserControl>
