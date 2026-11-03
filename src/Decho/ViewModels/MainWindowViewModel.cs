@@ -232,14 +232,22 @@ public sealed class MainWindowViewModel : ViewModelBase
     {
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
-            Chat.Messages.Add(new MessageViewModel(new MessageModel(
-                Guid.NewGuid().ToString("N"),
-                new UserModel("system", "System"),
-                DateTimeOffset.Now,
-                text,
-                Chat.CurrentChannelName,
-                Chat.CurrentServerUrl)));
+            Chat.Messages.Add(new MessageViewModel(CreateSystemMessage(text, Chat.CurrentChannelName, Chat.CurrentServerUrl)));
         });
+    }
+
+    private static MessageModel CreateSystemMessage(string text, string channelName, string serverUrl)
+    {
+        return new MessageModel(
+            Guid.NewGuid().ToString("N"),
+            new UserModel("system", "System"),
+            DateTimeOffset.Now,
+            text,
+            channelName,
+            serverUrl)
+        {
+            IsLocal = true,
+        };
     }
 
     private async Task ShowErrorAsync(string title, string message)
@@ -783,6 +791,80 @@ public sealed class MainWindowViewModel : ViewModelBase
             });
         };
 
+        ConnectionService.MessageDeleted += (serverUrl, channelName, messageId) =>
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                FindChannelViewModel(serverUrl, channelName)?.RemoveMessage(messageId);
+            });
+        };
+
+        ConnectionService.ChannelNuked += (serverUrl, channelName) =>
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                ChannelViewModel? channelVm = FindChannelViewModel(serverUrl, channelName);
+                if (channelVm is not null)
+                {
+                    channelVm.ClearMessages();
+                    channelVm.AddMessage(CreateSystemMessage("Channel history has been cleared by a moderator.", channelName, serverUrl));
+                }
+            });
+        };
+
+        ConnectionService.UserKicked += (serverUrl, channelName, username, reason) =>
+        {
+            if (IsCurrentUser(serverUrl, username))
+            {
+                return;
+            }
+
+            string reasonText = reason is not null ? $" ({reason})" : string.Empty;
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                FindChannelViewModel(serverUrl, channelName)?.AddMessage(
+                    CreateSystemMessage($"{username} was kicked{reasonText}", channelName, serverUrl));
+            });
+        };
+
+        ConnectionService.UserBanned += (serverUrl, username, reason) =>
+        {
+            if (IsCurrentUser(serverUrl, username))
+            {
+                return;
+            }
+
+            string reasonText = reason is not null ? $" ({reason})" : string.Empty;
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                // Bans apply to the whole server, so one notice in the open channel is enough.
+                if (string.Equals(serverUrl, Chat.CurrentServerUrl, StringComparison.OrdinalIgnoreCase))
+                {
+                    FindChannelViewModel(serverUrl, Chat.CurrentChannelName)?.AddMessage(
+                        CreateSystemMessage($"{username} was banned{reasonText}", Chat.CurrentChannelName, serverUrl));
+                }
+            });
+        };
+
+        ConnectionService.ForceDisconnected += (serverUrl, reason) =>
+        {
+            // The server only asks clients to leave, so the connection has to be closed here.
+            // Posted because stopping it from inside its own event handler is not safe.
+            Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
+            {
+                try
+                {
+                    await ConnectionService.DisconnectAsync(serverUrl);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Disconnect failed: {ex.Message}");
+                }
+
+                await ShowErrorAsync($"Disconnected from {new Uri(serverUrl).Host}", reason);
+            });
+        };
+
         ConnectionService.ErrorOccurred += (serverUrl, error) =>
         {
             Debug.WriteLine($"Error: {error}");
@@ -804,6 +886,11 @@ public sealed class MainWindowViewModel : ViewModelBase
         {
             _ = RefreshCurrentChannelAsync(serverUrl);
         };
+    }
+
+    private bool IsCurrentUser(string serverUrl, string username)
+    {
+        return string.Equals(username, UserService.GetCurrentUsername(serverUrl), StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task HandleSendTextAsync(string text)
@@ -1070,7 +1157,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
         try
         {
-            int offset = channel.Messages.Count;
+            int offset = channel.Messages.Count(m => !m.Model.IsLocal);
             List<MessageModel> older = await ChannelService.GetHistoryAsync(serverUrl, channelName, HubConstants.DefaultHistoryCount, offset);
 
             if (older.Count > 0)

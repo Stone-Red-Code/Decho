@@ -124,6 +124,16 @@ public sealed class ChannelViewModel(ChannelModel model) : ViewModelBase
         Messages.Add(new MessageViewModel(message));
     }
 
+    public void RemoveMessage(string messageId)
+    {
+        MessageViewModel? message = Messages.FirstOrDefault(m => m.Model.Id == messageId);
+        if (message is not null)
+        {
+            _ = Model.Messages.Remove(message.Model);
+            _ = Messages.Remove(message);
+        }
+    }
+
     public void InsertMessages(IList<MessageModel> olderMessages)
     {
         HashSet<string> existingIds = Messages.Select(m => m.Model.Id).ToHashSet();

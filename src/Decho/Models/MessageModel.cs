@@ -30,4 +30,7 @@ public sealed class MessageModel(
     public ReplyRefDto? ReplyTo { get; } = replyTo;
 
     public List<EmbedDto> Embeds { get; } = embeds ?? [];
+
+    /// <summary>Only exists on this client, such as a system notice, so it has no place in server history.</summary>
+    public bool IsLocal { get; init; }
 }

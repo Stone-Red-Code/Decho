@@ -51,6 +51,16 @@ public sealed class ConnectionService : IConnectionService
 
     public event Action<string>? Reconnected;
 
+    public event Action<string, string, string>? MessageDeleted;
+
+    public event Action<string, string>? ChannelNuked;
+
+    public event Action<string, string, string, string?>? UserKicked;
+
+    public event Action<string, string, string?>? UserBanned;
+
+    public event Action<string, string>? ForceDisconnected;
+
     private readonly Dictionary<string, ServerConnection> _connections = new(StringComparer.OrdinalIgnoreCase);
     private readonly IConfigPersistenceService _config;
     private readonly IAttachmentService _attachment;
@@ -355,6 +365,26 @@ public sealed class ConnectionService : IConnectionService
             ChannelDeleted?.Invoke(entry.Server.ServerUrl, channelName);
         };
 
+        conn.MessageDeleted += (channelName, messageId) =>
+        {
+            MessageDeleted?.Invoke(entry.Server.ServerUrl, channelName, messageId.ToString("N"));
+        };
+
+        conn.ChannelNuked += channelName =>
+        {
+            ChannelNuked?.Invoke(entry.Server.ServerUrl, channelName);
+        };
+
+        conn.UserKicked += (channelName, username, reason) =>
+        {
+            UserKicked?.Invoke(entry.Server.ServerUrl, channelName, username, reason);
+        };
+
+        conn.UserBanned += (username, reason) =>
+        {
+            UserBanned?.Invoke(entry.Server.ServerUrl, username, reason);
+        };
+
         conn.ChannelUpdated += channel =>
         {
             ChannelModel? existing = entry.Server.Channels.FirstOrDefault(c =>
@@ -383,7 +413,7 @@ public sealed class ConnectionService : IConnectionService
         {
             entry.Server.IsConnected = false;
             ServerStateChanged?.Invoke(entry.Server);
-            ErrorOccurred?.Invoke(entry.Server.ServerUrl, reason);
+            ForceDisconnected?.Invoke(entry.Server.ServerUrl, reason);
         };
 
         conn.Error += error =>

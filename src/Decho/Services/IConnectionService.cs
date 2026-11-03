@@ -18,6 +18,11 @@ public interface IConnectionService : IDisposable
     event Action<string, string>? ErrorOccurred;
     event Action<string, string>? ChannelDeleted;
     event Action<string>? Reconnected;
+    event Action<string, string, string>? MessageDeleted;
+    event Action<string, string>? ChannelNuked;
+    event Action<string, string, string, string?>? UserKicked;
+    event Action<string, string, string?>? UserBanned;
+    event Action<string, string>? ForceDisconnected;
 
     Task<ServerModel> ConnectAsync(string serverUrl, string username, string password, bool isRegister, bool rememberMe);
     Task ConnectWithSavedTokenAsync(string serverUrl, string username, string refreshToken, bool rememberMe);
