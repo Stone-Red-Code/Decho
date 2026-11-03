@@ -17,6 +17,16 @@
 		<Style Selector="Grid.message.continuation">
 			<Setter Property="Margin" Value="5 0" />
 		</Style>
+		<Style Selector="Grid.message Border.hoverBackground">
+			<Setter Property="Margin" Value="-3 -3 -3 0" />
+			<Setter Property="Opacity" Value="0" />
+		</Style>
+		<Style Selector="Grid.message.continuation Border.hoverBackground">
+			<Setter Property="Margin" Value="-3 0" />
+		</Style>
+		<Style Selector="Grid.message:pointerover Border.hoverBackground">
+			<Setter Property="Opacity" Value="1" />
+		</Style>
 		<Style Selector="Grid.message TextBlock.hoverHint">
 			<Setter Property="Opacity" Value="0" />
 		</Style>
@@ -40,6 +50,11 @@
 				<MenuItem x:Name="DeleteMenuItem" Header="Delete message" Click="OnDeleteMenuClick" />
 			</ContextMenu>
 		</Grid.ContextMenu>
+		<Border Classes="hoverBackground"
+				Grid.ColumnSpan="2"
+				Background="#18808080"
+				CornerRadius="4"
+				IsHitTestVisible="False" />
 		<Border Grid.ColumnSpan="2" Background="#2645a1" IsHitTestVisible="False" CornerRadius="4"
 				Opacity="{Binding IsHighlighted, Converter={StaticResource BoolOpacityConverter}}">
 			<Border.Transitions>
