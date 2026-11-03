@@ -31,10 +31,8 @@ public interface IUserService
 
     Task AssignRoleAsync(string serverUrl, string username, ServerRole role);
 
+    /// <summary>The account name used for lookups and mentions. Unlike the display name, it is unique.</summary>
     string? GetCurrentUsername(string serverUrl);
-
-    /// <summary>The account name used for lookups. Unlike the display name, it is unique.</summary>
-    string? GetAccountUsername(string serverUrl);
 
     Task DeleteMyAccountAsync(string serverUrl, string password);
 

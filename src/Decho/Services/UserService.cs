@@ -138,12 +138,6 @@ internal sealed class UserService : IUserService
     public string? GetCurrentUsername(string serverUrl)
     {
         ServerConnection? entry = _store.Get(serverUrl);
-        return entry?.User.DisplayName;
-    }
-
-    public string? GetAccountUsername(string serverUrl)
-    {
-        ServerConnection? entry = _store.Get(serverUrl);
         return entry?.User.Id;
     }
 

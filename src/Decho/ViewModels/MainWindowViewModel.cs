@@ -110,7 +110,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            bool isOwnProfile = string.Equals(profile.Username, UserService.GetAccountUsername(serverUrl), StringComparison.OrdinalIgnoreCase);
+            bool isOwnProfile = string.Equals(profile.Username, UserService.GetCurrentUsername(serverUrl), StringComparison.OrdinalIgnoreCase);
             ProfileWindow dialog = new ProfileWindow(profile, serverUrl, UserService, isOwnProfile);
             await dialog.ShowDialog(_mainWindow);
         });
@@ -630,7 +630,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            string target = username ?? UserService.GetAccountUsername(serverUrl) ?? string.Empty;
+            string target = username ?? UserService.GetCurrentUsername(serverUrl) ?? string.Empty;
             if (string.IsNullOrEmpty(target))
             {
                 return;
@@ -929,7 +929,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     private async Task HandleProfileRequested(ServerViewModel server)
     {
-        string? username = UserService.GetAccountUsername(server.ServerUrl);
+        string? username = UserService.GetCurrentUsername(server.ServerUrl);
         if (!string.IsNullOrEmpty(username))
         {
             await ShowProfileAsync(server.ServerUrl, username);
