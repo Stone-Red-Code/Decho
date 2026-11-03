@@ -35,7 +35,7 @@
                                       VerticalAlignment="Top"
                                       PointerPressed="OnAvatarPointerPressed" />
                     <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="4">
-                        <TextBlock x:Name="UsernameText" FontSize="20" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock x:Name="DisplayNameText" FontSize="20" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
 
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <Ellipse x:Name="StatusDot" Width="10" Height="10" VerticalAlignment="Center" />
@@ -53,8 +53,8 @@
                 <Separator Margin="0 4" />
 
                 <Grid ColumnDefinitions="85, *">
-                    <TextBlock Text="Display Name:" FontWeight="SemiBold" />
-                    <TextBlock x:Name="DisplayNameText" Grid.Column="1" />
+                    <TextBlock Text="Username:" FontWeight="SemiBold" />
+                    <TextBlock x:Name="UsernameText" Grid.Column="1" />
                 </Grid>
 
                 <Grid ColumnDefinitions="85, Auto, 10, *">

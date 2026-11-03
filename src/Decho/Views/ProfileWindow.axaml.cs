@@ -66,7 +66,7 @@ public sealed partial class ProfileWindow : Window
         StatusMessageText.Text = profile.StatusMessage;
         StatusMessageText.IsVisible = !string.IsNullOrWhiteSpace(profile.StatusMessage);
 
-        DisplayNameText.Text = profile.DisplayName ?? profile.Username;
+        DisplayNameText.Text = string.IsNullOrWhiteSpace(profile.DisplayName) ? profile.Username : profile.DisplayName;
 
         if (!string.IsNullOrWhiteSpace(profile.NicknameColor)
             && Color.TryParse(profile.NicknameColor, out Color parsedColor))
