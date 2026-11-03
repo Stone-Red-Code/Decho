@@ -1,6 +1,7 @@
 using Decho.Models;
 
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 
 namespace Decho.ViewModels;
 
@@ -13,7 +14,7 @@ public sealed class ChannelViewModel : ViewModelBase
         Model = model;
         Messages = new ObservableCollection<MessageViewModel>(
             model.Messages.Select(message => new MessageViewModel(message)));
-        Messages.CollectionChanged += (_, _) => UpdateMessageGrouping();
+        Messages.CollectionChanged += OnMessagesChanged;
         UpdateMessageGrouping();
     }
 
@@ -147,6 +148,11 @@ public sealed class ChannelViewModel : ViewModelBase
         return true;
     }
 
+    private void OnMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        UpdateMessageGrouping();
+    }
+
     private void UpdateMessageGrouping()
     {
         MessageViewModel? previous = null;
@@ -208,6 +214,40 @@ public sealed class ChannelViewModel : ViewModelBase
             _ = Model.Messages.Remove(message.Model);
             _ = Messages.Remove(message);
         }
+    }
+
+    /// <summary>
+    /// Drops all but the newest server messages so that the channel opens quickly next time.
+    /// Scrolling up loads the rest again. Only call this on a channel that isn't being shown.
+    /// </summary>
+    public void TrimHistory(int keepCount)
+    {
+        int firstKept = Messages.Count;
+        int kept = 0;
+        while (firstKept > 0 && kept < keepCount)
+        {
+            firstKept--;
+            if (!Messages[firstKept].Model.IsLocal)
+            {
+                kept++;
+            }
+        }
+
+        if (firstKept == 0)
+        {
+            return;
+        }
+
+        // Regrouping after every removal would make this quadratic.
+        Messages.CollectionChanged -= OnMessagesChanged;
+        for (int i = firstKept - 1; i >= 0; i--)
+        {
+            _ = Model.Messages.Remove(Messages[i].Model);
+            Messages.RemoveAt(i);
+        }
+        Messages.CollectionChanged += OnMessagesChanged;
+
+        UpdateMessageGrouping();
     }
 
     public void InsertMessages(IList<MessageModel> olderMessages)

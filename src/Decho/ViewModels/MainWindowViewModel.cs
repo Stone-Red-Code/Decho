@@ -1234,7 +1234,8 @@ public sealed class MainWindowViewModel : ViewModelBase
             int offset = channel.Messages.Count(m => !m.Model.IsLocal);
             List<MessageModel> older = await ChannelService.GetHistoryAsync(serverUrl, channelName, HubConstants.DefaultHistoryCount, offset);
 
-            if (older.Count > 0)
+            // A channel that was left in the meantime got trimmed, so these would leave a gap in it.
+            if (older.Count > 0 && ReferenceEquals(_openChannel, channel))
             {
                 channel.InsertMessages(older);
             }
@@ -1262,11 +1263,13 @@ public sealed class MainWindowViewModel : ViewModelBase
         // Leaving a channel uses up its marker, so the next unread messages get a fresh one.
         SaveOpenChannelReadPosition();
         _openChannel?.ClearUnreadMarker();
+        ChannelViewModel? previousChannel = _openChannel;
         _openChannel = channel;
 
         if (channel is null)
         {
             Chat.SetChannel(null);
+            previousChannel?.TrimHistory(HubConstants.DefaultHistoryCount);
             return;
         }
 
@@ -1277,6 +1280,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         channel.LastReadMessageId ??= _readPositions.Get(serverUrl, channel.Name);
         bool isServerConnected = Sidebar.GetServer(serverUrl)?.IsConnected ?? false;
         Chat.SetChannel(channel, serverUrl, isServerConnected);
+        previousChannel?.TrimHistory(HubConstants.DefaultHistoryCount);
 
         ServerViewModel? currentServer = Sidebar.GetServer(serverUrl);
         if (currentServer is not null)
