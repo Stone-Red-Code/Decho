@@ -7,7 +7,10 @@ using Avalonia.Platform.Storage;
 using Avalonia.SpellChecker;
 
 using Decho.Models;
+using Decho.Services;
 using Decho.ViewModels;
+
+using Splat;
 
 using System.Diagnostics;
 using System.Globalization;
@@ -18,6 +21,7 @@ namespace Decho.Views;
 public partial class MessageComposerView : UserControl
 {
     private readonly TextBoxSpellChecker _spellChecker;
+    private bool _isPastingText;
 
     public MessageComposerView()
     {
@@ -29,6 +33,7 @@ public partial class MessageComposerView : UserControl
 
         // Intercept Enter before the TextBox processes it (AcceptsReturn=True would insert a newline)
         MessageTextBox.AddHandler(InputElement.KeyDownEvent, OnTextBoxTunnelingKeyDown, RoutingStrategies.Tunnel);
+        MessageTextBox.AddHandler(TextBox.PastingFromClipboardEvent, OnPastingFromClipboard);
 
         MessageTextBox.GetObservable(TextBox.TextProperty)
             .Subscribe(_ => UpdateAutocomplete(MessageTextBox.Text ?? string.Empty, MessageTextBox.CaretIndex));
@@ -142,6 +147,58 @@ public partial class MessageComposerView : UserControl
         vm.Draft = MessageTextBox.Text ?? "";
         vm.Send();
         e.Handled = true;
+    }
+
+    private async void OnPastingFromClipboard(object? sender, RoutedEventArgs e)
+    {
+        if (_isPastingText)
+        {
+            return;
+        }
+
+        // The clipboard is read off the UI thread, so the default paste is cancelled up front
+        // and repeated below if it turns out to be text.
+        e.Handled = true;
+
+        MessageComposerViewModel? vm = this.GetDataContext<MessageComposerViewModel>();
+        IClipboardAttachmentReader? reader = Locator.Current.GetService<IClipboardAttachmentReader>();
+        if (vm is null || reader is null || !vm.IsEditable)
+        {
+            return;
+        }
+
+        try
+        {
+            IReadOnlyList<string> files = await Task.Run(reader.GetFiles);
+            if (files.Count > 0)
+            {
+                vm.StageFiles(files);
+                return;
+            }
+
+            // Text wins over images: apps like Excel and Word offer a picture of whatever text was copied.
+            string? text = TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard ? await clipboard.GetTextAsync() : null;
+            if (!string.IsNullOrEmpty(text))
+            {
+                _isPastingText = true;
+                MessageTextBox.Paste();
+                return;
+            }
+
+            byte[]? image = await Task.Run(reader.GetImage);
+            if (image is not null)
+            {
+                vm.StagePastedImage(image);
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Paste failed: {ex.Message}");
+        }
+        finally
+        {
+            _isPastingText = false;
+        }
     }
 
     private void OnMentionPointerPressed(object? sender, PointerPressedEventArgs e)

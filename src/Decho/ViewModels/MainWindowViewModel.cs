@@ -82,6 +82,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     public void Dispose()
     {
+        Chat.Composer.ClearStagedFiles();
         ConnectionService.Dispose();
     }
 
@@ -1044,7 +1045,14 @@ public sealed class MainWindowViewModel : ViewModelBase
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"Send failed: {ex.Message}");
+                    ShowSystemMessage($"Could not send attachments: {ex.Message}");
+                }
+                finally
+                {
+                    foreach (string filePath in filePaths)
+                    {
+                        PastedImageStore.Delete(filePath);
+                    }
                 }
             });
             return;

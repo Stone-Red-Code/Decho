@@ -1,4 +1,5 @@
 using Decho.Models;
+using Decho.Services;
 
 using EchoHub.Client.Commands;
 using EchoHub.Core.Constants;
@@ -150,14 +151,28 @@ public sealed class MessageComposerViewModel : ViewModelBase
         UpdateStagedSummary();
     }
 
+    public void StagePastedImage(byte[] png)
+    {
+        if (StagedFiles.Count < HubConstants.MaxAttachmentsPerMessage)
+        {
+            StageFiles([PastedImageStore.Save(png)]);
+        }
+    }
+
     public void RemoveStagedFile(StagedFile file)
     {
         _ = StagedFiles.Remove(file);
+        PastedImageStore.Delete(file.FilePath);
         UpdateStagedSummary();
     }
 
     public void ClearStagedFiles()
     {
+        foreach (StagedFile file in StagedFiles)
+        {
+            PastedImageStore.Delete(file.FilePath);
+        }
+
         StagedFiles.Clear();
         UpdateStagedSummary();
     }

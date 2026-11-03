@@ -57,6 +57,8 @@ public partial class App : Application
         IChannelService channelService = new ChannelService(store, crypto);
         Locator.CurrentMutable.RegisterLazySingleton<IChannelService>(() => channelService);
 
+        Locator.CurrentMutable.RegisterConstant<IClipboardAttachmentReader>(new ClipboardAttachmentReader());
+
         IAvatarService avatarService = new AvatarService(store);
         Locator.CurrentMutable.RegisterLazySingleton<IAvatarService>(() => avatarService);
 
