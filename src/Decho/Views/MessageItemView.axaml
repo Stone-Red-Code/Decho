@@ -9,7 +9,19 @@
 	<UserControl.Resources>
 		<conv:BoolToOpacityConverter x:Key="BoolOpacityConverter" />
 	</UserControl.Resources>
-	<Grid Margin="5" ColumnDefinitions="Auto, *">
+	<Grid Margin="5" ColumnDefinitions="Auto, *" Background="Transparent">
+		<Grid.ContextMenu>
+			<ContextMenu Opening="OnContextMenuOpening">
+				<MenuItem x:Name="ReplyMenuItem" Header="Reply" Click="OnReplyMenuClick" />
+				<MenuItem x:Name="MentionMenuItem" Header="Mention" Click="OnMentionMenuClick" />
+				<MenuItem x:Name="ProfileMenuItem" Header="View profile" Click="OnProfileMenuClick" />
+				<Separator x:Name="ActionsSeparator" />
+				<MenuItem x:Name="CopyTextMenuItem" Header="Copy text" Click="OnCopyTextMenuClick" />
+				<MenuItem x:Name="CopyIdMenuItem" Header="Copy message ID" Click="OnCopyIdMenuClick" />
+				<Separator x:Name="DeleteSeparator" />
+				<MenuItem x:Name="DeleteMenuItem" Header="Delete message" Click="OnDeleteMenuClick" />
+			</ContextMenu>
+		</Grid.ContextMenu>
 		<Border Grid.ColumnSpan="2" Background="#2645a1" IsHitTestVisible="False" CornerRadius="4"
 				Opacity="{Binding IsHighlighted, Converter={StaticResource BoolOpacityConverter}}">
 			<Border.Transitions>
@@ -56,6 +68,7 @@
 					   IsVisible="{Binding HasReply}"
 					   PointerPressed="OnReplyQuotePointerPressed" />
 			<SelectableTextBlock x:Name="MessageContent"
+								 ContextFlyout="{x:Null}"
 								 VerticalAlignment="Top"
 								 TextWrapping="Wrap"
 								 IsVisible="{Binding ShowContent}" />

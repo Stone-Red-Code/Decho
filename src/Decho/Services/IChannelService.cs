@@ -20,6 +20,8 @@ public interface IChannelService
 
     Task NukeChannelAsync(string serverUrl, string channelName);
 
+    Task DeleteMessageAsync(string serverUrl, string messageId);
+
     void UpdateChannelTopic(string serverUrl, string channelName, string? topic);
 
     Task<ChannelCryptoDto?> GetChannelCryptoAsync(string serverUrl, string channelName);

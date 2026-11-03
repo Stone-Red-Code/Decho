@@ -14,6 +14,8 @@ public sealed class MessageComposerViewModel : ViewModelBase
 
     public event Func<string, Task<string?>>? CommandRequested;
 
+    public event Action? FocusRequested;
+
     private readonly ObservableCollection<UserViewModel> _onlineUsers = [];
     private readonly ObservableCollection<string> _channelNames = [];
     private CommandHandler? _commandHandler;
@@ -195,6 +197,18 @@ public sealed class MessageComposerViewModel : ViewModelBase
         Draft = $"{before}{insertion}{after}";
         Autocomplete.Reset();
         return before.Length + insertion.Length;
+    }
+
+    public void InsertMention(string username)
+    {
+        string separator = Draft.Length > 0 && !char.IsWhiteSpace(Draft[^1]) ? " " : string.Empty;
+        Draft = $"{Draft}{separator}@{username} ";
+        RequestFocus();
+    }
+
+    public void RequestFocus()
+    {
+        FocusRequested?.Invoke();
     }
 
     public void ClearReplyTarget()

@@ -793,10 +793,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
         ConnectionService.MessageDeleted += (serverUrl, channelName, messageId) =>
         {
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            {
-                FindChannelViewModel(serverUrl, channelName)?.RemoveMessage(messageId);
-            });
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => RemoveMessage(serverUrl, channelName, messageId));
         };
 
         ConnectionService.ChannelNuked += (serverUrl, channelName) =>
@@ -806,6 +803,11 @@ public sealed class MainWindowViewModel : ViewModelBase
                 ChannelViewModel? channelVm = FindChannelViewModel(serverUrl, channelName);
                 if (channelVm is not null)
                 {
+                    if (Chat.Composer.ReplyTarget is { } target && channelVm.Messages.Contains(target))
+                    {
+                        Chat.Composer.ClearReplyTarget();
+                    }
+
                     channelVm.ClearMessages();
                     channelVm.AddMessage(CreateSystemMessage("Channel history has been cleared by a moderator.", channelName, serverUrl));
                 }
@@ -886,6 +888,59 @@ public sealed class MainWindowViewModel : ViewModelBase
         {
             _ = RefreshCurrentChannelAsync(serverUrl);
         };
+    }
+
+    /// <summary>
+    /// Hides the action when it is sure to fail. The server has the final say, because a
+    /// moderator also needs a higher role than the author, which isn't known for offline users.
+    /// </summary>
+    public bool CanDeleteMessage(MessageViewModel message)
+    {
+        string serverUrl = message.ServerUrl ?? Chat.CurrentServerUrl;
+        if (message.Model.IsLocal || Sidebar.GetServer(serverUrl)?.IsConnected != true)
+        {
+            return false;
+        }
+
+        if (IsCurrentUser(serverUrl, message.AuthorUsername))
+        {
+            return true;
+        }
+
+        UserViewModel? self = Chat.OnlineUsers.FirstOrDefault(u => IsCurrentUser(serverUrl, u.Username));
+        return self is null || self.Role >= ServerRole.Mod;
+    }
+
+    public async Task DeleteMessageAsync(MessageViewModel message)
+    {
+        IMsBox<ButtonResult> confirmBox = MessageBoxManager.GetMessageBoxStandard(
+            "Delete Message", "Delete this message? This cannot be undone.", ButtonEnum.YesNo);
+        ButtonResult confirm = await confirmBox.ShowWindowDialogAsync(_mainWindow);
+        if (confirm != ButtonResult.Yes)
+        {
+            return;
+        }
+
+        string serverUrl = message.ServerUrl ?? Chat.CurrentServerUrl;
+        try
+        {
+            await ChannelService.DeleteMessageAsync(serverUrl, message.Model.Id);
+            RemoveMessage(serverUrl, message.Model.ChannelName, message.Model.Id);
+        }
+        catch (Exception ex)
+        {
+            await ShowErrorAsync("Could Not Delete Message", ex.Message);
+        }
+    }
+
+    private void RemoveMessage(string serverUrl, string channelName, string messageId)
+    {
+        if (Chat.Composer.ReplyTarget?.Model.Id == messageId)
+        {
+            Chat.Composer.ClearReplyTarget();
+        }
+
+        FindChannelViewModel(serverUrl, channelName)?.RemoveMessage(messageId);
     }
 
     private bool IsCurrentUser(string serverUrl, string username)

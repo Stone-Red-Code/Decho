@@ -153,7 +153,13 @@ public partial class MessageItemView : UserControl
                 label.Margin = new Thickness(0, 0, 0, -2);
                 label.Foreground = ColorPalette.Yellow05;
                 string serverUrl = ResolveServerUrl();
-                label.PointerPressed += (_, args) => _ = OpenProfileAsync(username, serverUrl);
+                label.PointerPressed += (_, args) =>
+                {
+                    if (IsLeftClick(args))
+                    {
+                        _ = OpenProfileAsync(username, serverUrl);
+                    }
+                };
             }
             else if (match.Value[0] == '#')
             {
@@ -167,7 +173,13 @@ public partial class MessageItemView : UserControl
                 string url = match.Value;
                 label.Foreground = ColorPalette.Blue05;
                 label.TextDecorations = TextDecorations.Underline;
-                label.PointerPressed += (_, args) => OpenUrl(url);
+                label.PointerPressed += (_, args) =>
+                {
+                    if (IsLeftClick(args))
+                    {
+                        OpenUrl(url);
+                    }
+                };
             }
 
             container.Child = label;
@@ -193,9 +205,106 @@ public partial class MessageItemView : UserControl
         return string.Empty;
     }
 
+    private static bool IsLeftClick(PointerPressedEventArgs e)
+    {
+        return e.GetCurrentPoint(null).Properties.IsLeftButtonPressed;
+    }
+
+    private void OnContextMenuOpening(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
+        if (DataContext is not MessageViewModel msg || mainVm is null)
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        bool isRemote = !msg.Model.IsLocal;
+        bool canCompose = isRemote && mainVm.Chat.Composer.IsEditable;
+        bool isConnected = mainVm.Sidebar.GetServer(ResolveServerUrl())?.IsConnected ?? false;
+
+        ReplyMenuItem.IsVisible = canCompose;
+        MentionMenuItem.IsVisible = canCompose;
+        ProfileMenuItem.IsVisible = isRemote && isConnected;
+        ActionsSeparator.IsVisible = canCompose || ProfileMenuItem.IsVisible;
+
+        CopyTextMenuItem.IsVisible = msg.ShowContent;
+        CopyIdMenuItem.IsVisible = isRemote;
+
+        DeleteMenuItem.IsVisible = mainVm.CanDeleteMessage(msg);
+        DeleteSeparator.IsVisible = DeleteMenuItem.IsVisible;
+    }
+
+    private void OnReplyMenuClick(object? sender, RoutedEventArgs e)
+    {
+        MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
+        if (DataContext is MessageViewModel msg && mainVm is not null)
+        {
+            mainVm.Chat.Composer.ReplyTarget = msg;
+            mainVm.Chat.Composer.RequestFocus();
+        }
+    }
+
+    private void OnMentionMenuClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MessageViewModel msg)
+        {
+            this.GetMainWindowViewModel()?.Chat.Composer.InsertMention(msg.AuthorUsername);
+        }
+    }
+
+    private void OnProfileMenuClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MessageViewModel msg)
+        {
+            _ = OpenProfileAsync(msg.AuthorUsername, ResolveServerUrl());
+        }
+    }
+
+    private async void OnCopyTextMenuClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MessageViewModel msg)
+        {
+            string selected = MessageContent.SelectedText;
+            await CopyToClipboardAsync(string.IsNullOrEmpty(selected) ? msg.DisplayContent : selected);
+        }
+    }
+
+    private async void OnCopyIdMenuClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MessageViewModel msg)
+        {
+            await CopyToClipboardAsync(Guid.TryParse(msg.Model.Id, out Guid id) ? id.ToString() : msg.Model.Id);
+        }
+    }
+
+    private async void OnDeleteMenuClick(object? sender, RoutedEventArgs e)
+    {
+        MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
+        if (DataContext is MessageViewModel msg && mainVm is not null)
+        {
+            await mainVm.DeleteMessageAsync(msg);
+        }
+    }
+
+    private async Task CopyToClipboardAsync(string text)
+    {
+        try
+        {
+            if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
+            {
+                await clipboard.SetTextAsync(text);
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Copy to clipboard failed: {ex.Message}");
+        }
+    }
+
     private void OnChannelPointerPressed(string channelName, PointerPressedEventArgs e)
     {
-        if (DataContext is not MessageViewModel msg)
+        if (!IsLeftClick(e) || DataContext is not MessageViewModel msg)
         {
             return;
         }
@@ -267,7 +376,7 @@ public partial class MessageItemView : UserControl
 
     private async void OnAuthorNamePointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
     {
-        if (DataContext is not MessageViewModel msg)
+        if (!IsLeftClick(e) || DataContext is not MessageViewModel msg)
         {
             return;
         }
@@ -335,7 +444,7 @@ public partial class MessageItemView : UserControl
 
     private async void OnAttachmentImagePointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
     {
-        if (sender is not Image image)
+        if (!IsLeftClick(e) || sender is not Image image)
         {
             return;
         }
@@ -386,7 +495,7 @@ public partial class MessageItemView : UserControl
 
     private void OnReplyPointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
     {
-        if (DataContext is not MessageViewModel msg)
+        if (!IsLeftClick(e) || DataContext is not MessageViewModel msg)
             return;
 
         MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
@@ -398,7 +507,7 @@ public partial class MessageItemView : UserControl
 
     private void OnReplyQuotePointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
     {
-        if (DataContext is not MessageViewModel msg || msg.ReplyTo is null)
+        if (!IsLeftClick(e) || DataContext is not MessageViewModel msg || msg.ReplyTo is null)
             return;
 
         MainWindowViewModel? mainVm = this.GetMainWindowViewModel();

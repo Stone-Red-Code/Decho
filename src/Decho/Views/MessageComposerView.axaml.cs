@@ -50,7 +50,18 @@ public partial class MessageComposerView : UserControl
                     PositionPopupAtCursor();
                 }
             };
+            vm.FocusRequested += FocusInput;
         }
+    }
+
+    private void FocusInput()
+    {
+        // Posted so this runs after a closing context menu has handed focus back.
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            MessageTextBox.CaretIndex = MessageTextBox.Text?.Length ?? 0;
+            _ = MessageTextBox.Focus();
+        }, Avalonia.Threading.DispatcherPriority.Background);
     }
 
     private void UpdateAutocomplete(string text, int caretIndex)

@@ -128,6 +128,14 @@ internal sealed class ChannelService : IChannelService
         await entry.ApiClient.NukeChannelAsync(channelName);
     }
 
+    public async Task DeleteMessageAsync(string serverUrl, string messageId)
+    {
+        ServerConnection? entry = _store.Get(serverUrl);
+        if (entry is null) throw new InvalidOperationException("Not connected to server");
+
+        await entry.ApiClient.DeleteMessageAsync(Guid.Parse(messageId));
+    }
+
     public void UpdateChannelTopic(string serverUrl, string channelName, string? topic)
     {
         ServerConnection? entry = _store.Get(serverUrl);
