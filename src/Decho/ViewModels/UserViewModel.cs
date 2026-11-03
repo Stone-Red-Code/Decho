@@ -5,8 +5,9 @@ using EchoHub.Core.Models;
 
 namespace Decho.ViewModels;
 
-public sealed class UserViewModel(UserPresenceDto dto) : ViewModelBase
+public sealed class UserViewModel(UserPresenceDto dto, string serverUrl) : ViewModelBase
 {
+    public string ServerUrl { get; } = serverUrl;
     public string Username { get; } = dto.Username;
     public string DisplayName { get; } = dto.DisplayName ?? dto.Username;
     public string? NicknameColor { get; } = dto.NicknameColor;

@@ -1,0 +1,14 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Decho.Views.AvatarView">
+    <Panel>
+        <Ellipse Fill="{DynamicResource UiTheme01}" />
+        <TextBlock x:Name="InitialText"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   FontWeight="Bold" />
+        <Ellipse x:Name="Picture"
+                 IsVisible="False"
+                 RenderOptions.BitmapInterpolationMode="HighQuality" />
+    </Panel>
+</UserControl>

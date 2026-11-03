@@ -57,7 +57,10 @@ public partial class App : Application
         IChannelService channelService = new ChannelService(store, crypto);
         Locator.CurrentMutable.RegisterLazySingleton<IChannelService>(() => channelService);
 
-        IUserService userService = new UserService(store);
+        IAvatarService avatarService = new AvatarService(store);
+        Locator.CurrentMutable.RegisterLazySingleton<IAvatarService>(() => avatarService);
+
+        IUserService userService = new UserService(store, avatarService);
         Locator.CurrentMutable.RegisterLazySingleton<IUserService>(() => userService);
 
         IInviteService inviteService = new InviteService(store);

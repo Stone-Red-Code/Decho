@@ -13,6 +13,8 @@ public sealed class MessageViewModel(MessageModel model) : ViewModelBase
 
     public string AuthorName => Model.Author.DisplayName;
 
+    public string AuthorUsername => Model.Author.Id;
+
     public IBrush? AuthorColor
     {
         get

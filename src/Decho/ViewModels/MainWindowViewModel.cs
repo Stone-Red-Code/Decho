@@ -85,6 +85,36 @@ public sealed class MainWindowViewModel : ViewModelBase
         ConnectionService.Dispose();
     }
 
+    public async Task ShowProfileAsync(string serverUrl, string username)
+    {
+        UserProfileDto? profile;
+        try
+        {
+            profile = await UserService.GetUserProfileAsync(serverUrl, username);
+        }
+        catch (Exception ex)
+        {
+            ShowSystemMessage($"Could not load profile: {ex.Message}");
+            return;
+        }
+
+        if (profile is null)
+        {
+            return;
+        }
+
+        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            if (_mainWindow is null)
+            {
+                return;
+            }
+
+            ProfileWindow dialog = new ProfileWindow(profile, serverUrl);
+            await dialog.ShowDialog(_mainWindow);
+        });
+    }
+
     private async void AddServer()
     {
         ConnectDialogResult? result = await ShowConnectDialogAsync(null);
@@ -599,34 +629,13 @@ public sealed class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            string target = username ?? UserService.GetCurrentUsername(serverUrl) ?? string.Empty;
+            string target = username ?? UserService.GetAccountUsername(serverUrl) ?? string.Empty;
             if (string.IsNullOrEmpty(target))
             {
                 return;
             }
 
-            try
-            {
-                UserProfileDto? profile = await UserService.GetUserProfileAsync(serverUrl, target);
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                {
-                    if (profile is null)
-                    {
-                        Debug.WriteLine("User not found");
-                        return;
-                    }
-
-                    ProfileWindow dialog = new ProfileWindow(profile);
-                    if (_mainWindow is not null)
-                    {
-                        _ = dialog.ShowDialog(_mainWindow);
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Failed to load profile: {ex.Message}");
-            }
+            await ShowProfileAsync(serverUrl, target);
         };
 
         _commandHandler.OnOpenServers += () =>

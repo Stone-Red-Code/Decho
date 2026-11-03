@@ -129,7 +129,7 @@ public sealed class ChatViewModel : ViewModelBase
         OnlineUsers.Clear();
         foreach (UserPresenceDto user in users)
         {
-            OnlineUsers.Add(new UserViewModel(user));
+            OnlineUsers.Add(new UserViewModel(user, CurrentServerUrl));
         }
         OnlineUserCount = $"{users.Count}";
         Composer.UpdateAvailableUsers(OnlineUsers);
@@ -139,7 +139,7 @@ public sealed class ChatViewModel : ViewModelBase
     {
         if (OnlineUsers.All(u => u.Username != user.Username))
         {
-            OnlineUsers.Add(new UserViewModel(user));
+            OnlineUsers.Add(new UserViewModel(user, CurrentServerUrl));
             OnlineUserCount = $"{OnlineUsers.Count}";
         }
         Composer.UpdateAvailableUsers(OnlineUsers);

@@ -10,11 +10,15 @@ namespace Decho.Services;
 
 internal sealed class UserService : IUserService
 {
-    private readonly IConnectionStore _store;
+    private static readonly HttpClient AvatarDownloadClient = new HttpClient();
 
-    public UserService(IConnectionStore store)
+    private readonly IConnectionStore _store;
+    private readonly IAvatarService _avatarService;
+
+    public UserService(IConnectionStore store, IAvatarService avatarService)
     {
         _store = store;
+        _avatarService = avatarService;
     }
 
     public async Task UpdateStatusAsync(string serverUrl, UserStatus status, string? statusMessage)
@@ -37,10 +41,23 @@ internal sealed class UserService : IUserService
 
     public async Task SetAvatarAsync(string serverUrl, string target)
     {
+        byte[] source = Uri.TryCreate(target, UriKind.Absolute, out Uri? uri) && uri.Scheme is "http" or "https"
+            ? await AvatarDownloadClient.GetByteArrayAsync(uri)
+            : await File.ReadAllBytesAsync(target);
+
+        using MemoryStream stream = new MemoryStream(source);
+        byte[] prepared = await Task.Run(() => AvatarImageProcessor.PrepareForUpload(stream));
+        await SetAvatarAsync(serverUrl, prepared);
+    }
+
+    public async Task SetAvatarAsync(string serverUrl, byte[] preparedImage)
+    {
         ServerConnection? entry = _store.Get(serverUrl);
         if (entry is null) return;
 
-        _ = await AvatarHelper.UploadAsync(entry.ApiClient, target);
+        using MemoryStream stream = new MemoryStream(preparedImage);
+        string? avatarAscii = await entry.ApiClient.UploadAvatarAsync(stream, "avatar.png");
+        _avatarService.Publish(serverUrl, entry.User.Id, avatarAscii);
     }
 
     public async Task<UserProfileDto?> GetUserProfileAsync(string serverUrl, string username)
@@ -48,7 +65,13 @@ internal sealed class UserService : IUserService
         ServerConnection? entry = _store.Get(serverUrl);
         if (entry is null) return null;
 
-        return await entry.ApiClient.GetUserProfileAsync(username);
+        UserProfileDto? profile = await entry.ApiClient.GetUserProfileAsync(username);
+        if (profile is not null)
+        {
+            _avatarService.Publish(serverUrl, profile.Username, profile.AvatarAscii);
+        }
+
+        return profile;
     }
 
     public async Task<List<UserPresenceDto>> GetOnlineUsersAsync(string serverUrl, string channelName)
@@ -111,6 +134,12 @@ internal sealed class UserService : IUserService
     {
         ServerConnection? entry = _store.Get(serverUrl);
         return entry?.User.DisplayName;
+    }
+
+    public string? GetAccountUsername(string serverUrl)
+    {
+        ServerConnection? entry = _store.Get(serverUrl);
+        return entry?.User.Id;
     }
 
     public async Task DeleteMyAccountAsync(string serverUrl, string password)

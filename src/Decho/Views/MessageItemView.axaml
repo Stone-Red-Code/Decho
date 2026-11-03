@@ -3,6 +3,7 @@
 			 xmlns:vm="using:Decho.ViewModels"
 			 xmlns:dto="using:EchoHub.Core.DTOs"
 			 xmlns:conv="using:Decho.Converters"
+			 xmlns:views="using:Decho.Views"
 			 x:Class="Decho.Views.MessageItemView"
 			 x:DataType="vm:MessageViewModel">
 	<UserControl.Resources>
@@ -17,11 +18,15 @@
 				</Transitions>
 			</Border.Transitions>
 		</Border>
-		<Ellipse VerticalAlignment="Top"
-				 Width="40"
-				 Height="40"
-				 Fill="{DynamicResource UiTheme00}"
-				 Margin="0 0 8 0" />
+		<views:AvatarView VerticalAlignment="Top"
+						  Width="40"
+						  Height="40"
+						  Margin="0 0 8 0"
+						  Cursor="Hand"
+						  Username="{Binding AuthorUsername}"
+						  ServerUrl="{Binding ServerUrl}"
+						  FallbackName="{Binding AuthorName}"
+						  PointerPressed="OnAuthorNamePointerPressed" />
 
 		<StackPanel Grid.Column="1" VerticalAlignment="Top">
 			<StackPanel Orientation="Horizontal" Margin="0 5 0 0">

@@ -100,19 +100,12 @@ public partial class MessageItemView : UserControl
     private async Task OpenProfileAsync(string username, string serverUrl)
     {
         MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
-        Window? parent = this.GetParentWindow();
-        if (mainVm is null || parent is null)
+        if (mainVm is null)
         {
             return;
         }
 
-        UserProfileDto? profile = await mainVm.UserService.GetUserProfileAsync(serverUrl, username);
-        if (profile is null)
-        {
-            return;
-        }
-
-        await new ProfileWindow(profile).ShowDialog(parent);
+        await mainVm.ShowProfileAsync(serverUrl, username);
     }
 
     private void BuildMessageInlines(string content)

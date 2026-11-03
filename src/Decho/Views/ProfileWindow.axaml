@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:views="using:Decho.Views"
         mc:Ignorable="d"
         x:Class="Decho.Views.ProfileWindow"
         Title="Profile"
@@ -13,25 +14,33 @@
         Icon="/Assets/Decho.ico">
     <Border Padding="15">
         <DockPanel>
-            <Button DockPanel.Dock="Bottom"
-                    Content="Close"
-                    HorizontalAlignment="Right"
-                    Width="80"
-                    Margin="0 8 0 0"
-                    Click="OnCloseClick" />
+            <StackPanel DockPanel.Dock="Bottom"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        Spacing="8"
+                        Margin="0 8 0 0">
+                <Button Content="Close"
+                        Width="80"
+                        Click="OnCloseClick" />
+            </StackPanel>
             <StackPanel Spacing="8">
-                <TextBlock x:Name="UsernameText" FontSize="20" FontWeight="Bold" />
+                <Grid ColumnDefinitions="Auto, 12, *">
+                    <views:AvatarView x:Name="Avatar" Width="80" Height="80" />
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="4">
+                        <TextBlock x:Name="UsernameText" FontSize="20" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
 
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <Ellipse x:Name="StatusDot" Width="10" Height="10" VerticalAlignment="Center" />
-                    <TextBlock x:Name="StatusText" VerticalAlignment="Center" />
-                </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Ellipse x:Name="StatusDot" Width="10" Height="10" VerticalAlignment="Center" />
+                            <TextBlock x:Name="StatusText" VerticalAlignment="Center" />
+                        </StackPanel>
 
-                <TextBlock x:Name="StatusMessageText"
-                           FontSize="12"
-                           Opacity="0.7"
-                           TextWrapping="Wrap"
-                           IsVisible="False" />
+                        <TextBlock x:Name="StatusMessageText"
+                                   FontSize="12"
+                                   Opacity="0.7"
+                                   TextWrapping="Wrap"
+                                   IsVisible="False" />
+                    </StackPanel>
+                </Grid>
 
                 <Separator Margin="0 4" />
 

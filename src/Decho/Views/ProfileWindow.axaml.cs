@@ -13,22 +13,39 @@ public sealed partial class ProfileWindow : Window
         InitializeComponent();
     }
 
-    public ProfileWindow(UserProfileDto profile)
+    public ProfileWindow(UserProfileDto profile, string serverUrl)
     {
         InitializeComponent();
 
         Title = $"Profile - {profile.Username}";
+        Avatar.ServerUrl = serverUrl;
+        Avatar.Username = profile.Username;
 
+        ShowProfile(profile);
+    }
+
+    private static string FormatStatus(UserStatus status)
+    {
+        return status switch
+        {
+            UserStatus.Online => "Online",
+            UserStatus.Away => "Away",
+            UserStatus.DoNotDisturb => "Do Not Disturb",
+            UserStatus.Invisible => "Invisible",
+            _ => "Unknown",
+        };
+    }
+
+    private void ShowProfile(UserProfileDto profile)
+    {
+        Avatar.FallbackName = profile.DisplayName;
         UsernameText.Text = profile.Username;
 
         StatusText.Text = FormatStatus(profile.Status);
         StatusDot.Fill = GetStatusBrush(profile.Status);
 
-        if (!string.IsNullOrWhiteSpace(profile.StatusMessage))
-        {
-            StatusMessageText.Text = profile.StatusMessage;
-            StatusMessageText.IsVisible = true;
-        }
+        StatusMessageText.Text = profile.StatusMessage;
+        StatusMessageText.IsVisible = !string.IsNullOrWhiteSpace(profile.StatusMessage);
 
         DisplayNameText.Text = profile.DisplayName ?? profile.Username;
 
@@ -46,21 +63,9 @@ public sealed partial class ProfileWindow : Window
         }
 
         RoleText.Text = FormatRole(profile.Role);
-        BioText.Text = profile.Bio ?? "-";
+        BioText.Text = string.IsNullOrWhiteSpace(profile.Bio) ? "-" : profile.Bio;
         JoinedText.Text = profile.CreatedAt.ToString("g");
         LastSeenText.Text = profile.LastSeenAt.ToString("g");
-    }
-
-    private static string FormatStatus(UserStatus status)
-    {
-        return status switch
-        {
-            UserStatus.Online => "Online",
-            UserStatus.Away => "Away",
-            UserStatus.DoNotDisturb => "Do Not Disturb",
-            UserStatus.Invisible => "Invisible",
-            _ => "Unknown",
-        };
     }
 
     private static IBrush GetStatusBrush(UserStatus status)
