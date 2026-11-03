@@ -5,6 +5,7 @@ using Avalonia.VisualTree;
 
 using Decho.ViewModels;
 
+using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 
 namespace Decho.Views;
@@ -14,6 +15,7 @@ public partial class MessageListView : UserControl
     private const double RevealMargin = 40;
 
     private ChatViewModel? _chat;
+    private ObservableCollection<MessageViewModel>? _observedMessages;
     private bool _hasPendingScroll;
     private bool _wasAtBottom;
     private bool _loadingMore;
@@ -112,7 +114,6 @@ public partial class MessageListView : UserControl
     {
         if (_chat is not null)
         {
-            _chat.Messages.CollectionChanged -= OnMessagesChanged;
             _chat.PropertyChanged -= OnViewModelPropertyChanged;
             _chat.LoadMoreRequested -= OnLoadMoreRequested;
             _chat.ScrollToMessageRequested -= ScrollToMessage;
@@ -123,9 +124,9 @@ public partial class MessageListView : UserControl
         scroll?.ScrollChanged -= OnScrollChanged;
 
         _chat = DataContext as ChatViewModel;
+        ObserveMessages(_chat?.Messages);
         if (_chat is not null)
         {
-            _chat.Messages.CollectionChanged += OnMessagesChanged;
             _chat.PropertyChanged += OnViewModelPropertyChanged;
             _chat.LoadMoreRequested += OnLoadMoreRequested;
             _chat.ScrollToMessageRequested += ScrollToMessage;
@@ -167,13 +168,20 @@ public partial class MessageListView : UserControl
     {
         if (e.PropertyName == nameof(ChatViewModel.Messages))
         {
-            _chat!.Messages.CollectionChanged += OnMessagesChanged;
+            ObserveMessages(_chat!.Messages);
             ScrollToBottom();
         }
         else if (e.PropertyName == nameof(ChatViewModel.IsLoadingMore) && !_chat!.IsLoadingMore && _loadingMore)
         {
             RestoreScrollPosition();
         }
+    }
+
+    private void ObserveMessages(ObservableCollection<MessageViewModel>? messages)
+    {
+        _observedMessages?.CollectionChanged -= OnMessagesChanged;
+        _observedMessages = messages;
+        _observedMessages?.CollectionChanged += OnMessagesChanged;
     }
 
     private void OnMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
