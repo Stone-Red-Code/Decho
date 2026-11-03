@@ -25,6 +25,10 @@ public partial class AvatarView : UserControl
     private int _loadVersion;
     private bool _isAttached;
 
+    public event Action? PictureChanged;
+
+    public Bitmap? CurrentPicture { get; private set; }
+
     public string? Username
     {
         get => GetValue(UsernameProperty);
@@ -133,6 +137,8 @@ public partial class AvatarView : UserControl
     {
         Picture.Fill = bitmap is null ? null : new ImageBrush(bitmap) { Stretch = Stretch.UniformToFill };
         Picture.IsVisible = bitmap is not null;
+        CurrentPicture = bitmap;
+        PictureChanged?.Invoke();
     }
 
     private void UpdateInitial()

@@ -29,7 +29,11 @@
             </StackPanel>
             <StackPanel Spacing="8">
                 <Grid ColumnDefinitions="Auto, 12, *">
-                    <views:AvatarView x:Name="Avatar" Width="80" Height="80" />
+                    <views:AvatarView x:Name="Avatar"
+                                      Width="80"
+                                      Height="80"
+                                      VerticalAlignment="Top"
+                                      PointerPressed="OnAvatarPointerPressed" />
                     <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="4">
                         <TextBlock x:Name="UsernameText" FontSize="20" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
 

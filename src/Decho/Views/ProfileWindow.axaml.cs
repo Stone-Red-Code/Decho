@@ -1,5 +1,7 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 
 using Decho.Services;
 
@@ -12,6 +14,8 @@ namespace Decho.Views;
 
 public sealed partial class ProfileWindow : Window
 {
+    private const double EnlargedAvatarSize = 480;
+
     private readonly string _serverUrl = string.Empty;
     private readonly IUserService? _userService;
     private UserProfileDto? _profile;
@@ -32,6 +36,7 @@ public sealed partial class ProfileWindow : Window
         Title = $"Profile - {profile.Username}";
         Avatar.ServerUrl = serverUrl;
         Avatar.Username = profile.Username;
+        Avatar.PictureChanged += () => Avatar.Cursor = Avatar.CurrentPicture is null ? Cursor.Default : new Cursor(StandardCursorType.Hand);
 
         ShowProfile(profile);
     }
@@ -103,6 +108,24 @@ public sealed partial class ProfileWindow : Window
             ServerRole.Member => "Member",
             _ => role.ToString(),
         };
+    }
+
+    private async void OnAvatarPointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+    {
+        if (Avatar.CurrentPicture is not Bitmap picture || _profile is null)
+        {
+            return;
+        }
+
+        Func<Task<string?>> downloadAsync = () =>
+        {
+            string tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.png");
+            picture.Save(tempPath);
+            return Task.FromResult<string?>(tempPath);
+        };
+
+        ImageViewerWindow viewer = new ImageViewerWindow(picture, $"{_profile.Username}.png", downloadAsync, EnlargedAvatarSize);
+        await viewer.ShowDialog(this);
     }
 
     private async void OnEditClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)

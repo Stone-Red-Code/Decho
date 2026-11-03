@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 
@@ -6,6 +7,9 @@ namespace Decho.Views;
 
 public sealed partial class ImageViewerWindow : Window
 {
+    private const double ImagePadding = 16;
+    private const double ButtonRowHeight = 48;
+
     private readonly Func<Task<string?>>? _downloadAsync;
 
     public ImageViewerWindow()
@@ -13,13 +17,22 @@ public sealed partial class ImageViewerWindow : Window
         InitializeComponent();
     }
 
-    public ImageViewerWindow(Bitmap bitmap, string fileName, Func<Task<string?>>? downloadAsync = null)
+    /// <param name="initialImageSize">Opens at this image size for square images too small to fill the window sharply.</param>
+    public ImageViewerWindow(Bitmap bitmap, string fileName, Func<Task<string?>>? downloadAsync = null, double? initialImageSize = null)
     {
         InitializeComponent();
         Title = fileName;
         ImageView.Source = bitmap;
         _downloadAsync = downloadAsync;
         DownloadButton.IsVisible = downloadAsync is not null;
+
+        if (initialImageSize is double imageSize)
+        {
+            RenderOptions.SetBitmapInterpolationMode(ImageView, BitmapInterpolationMode.HighQuality);
+            SizeToContent = SizeToContent.Manual;
+            Width = imageSize + ImagePadding;
+            Height = imageSize + ImagePadding + ButtonRowHeight;
+        }
 
         Opened += (_, _) =>
         {
