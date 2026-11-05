@@ -20,6 +20,7 @@ using System.Diagnostics;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace Decho.ViewModels;
 
@@ -365,7 +366,7 @@ public sealed class MainWindowViewModel : ViewModelBase
                 && string.Equals(message.ReplyTo?.SenderUsername, username, StringComparison.OrdinalIgnoreCase);
             bool isMention = isReplyToMe
                 || (!string.IsNullOrEmpty(username)
-                    && message.Content.Contains($"@{username}", StringComparison.OrdinalIgnoreCase));
+                    && ContainsMention(message.Content, username));
 
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
@@ -1006,6 +1007,15 @@ public sealed class MainWindowViewModel : ViewModelBase
         }
 
         FindChannelViewModel(serverUrl, channelName)?.RemoveMessage(messageId);
+    }
+
+    /// <summary>Matches @username only as a whole name, so @bobby doesn't mention bob.</summary>
+    private static bool ContainsMention(string content, string username)
+    {
+        return Regex.IsMatch(
+            content,
+            $@"(?<![\w])@{Regex.Escape(username)}(?![\w])",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     }
 
     private bool IsCurrentUser(string serverUrl, string username)
