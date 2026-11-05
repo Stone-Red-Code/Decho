@@ -8,7 +8,6 @@
         Icon="/Assets/Decho.ico">
     <StackPanel Margin="12" Spacing="8">
         <TextBlock x:Name="DescriptionText" TextWrapping="Wrap" />
-        <TextBox x:Name="UsernameBox" Watermark="Username" IsVisible="False" />
         <TextBox x:Name="ReasonBox" Watermark="Reason (optional)" IsVisible="False" />
         <ComboBox x:Name="DurationBox" HorizontalAlignment="Stretch" IsVisible="False" />
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">

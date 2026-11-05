@@ -1,0 +1,17 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Decho.Views.TextPromptWindow"
+        Width="380"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Icon="/Assets/Decho.ico">
+    <StackPanel Margin="12" Spacing="8">
+        <TextBlock x:Name="DescriptionText" TextWrapping="Wrap" />
+        <TextBox x:Name="InputBox" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button Content="Cancel" IsCancel="True" Click="OnCancelClicked" />
+            <Button x:Name="ConfirmButton" IsDefault="True" Click="OnConfirmClicked" />
+        </StackPanel>
+    </StackPanel>
+</Window>

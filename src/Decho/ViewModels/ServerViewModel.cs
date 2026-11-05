@@ -33,21 +33,11 @@ public sealed class ServerViewModel : ViewModelBase
         remove => _createChannelRequested = (Func<Task>?)Delegate.Remove(_createChannelRequested, value);
     }
 
-    public event Func<Task>? DeleteChannelRequested
-    {
-        add => _deleteChannelRequested = (Func<Task>?)Delegate.Combine(_deleteChannelRequested, value);
-        remove => _deleteChannelRequested = (Func<Task>?)Delegate.Remove(_deleteChannelRequested, value);
-    }
-
     public event Func<Task>? ProfileRequested
     {
         add => _profileRequested = (Func<Task>?)Delegate.Combine(_profileRequested, value);
         remove => _profileRequested = (Func<Task>?)Delegate.Remove(_profileRequested, value);
     }
-
-    public event Func<Task>? LeaveChannelRequested;
-
-    public event Func<Task>? ClearHistoryRequested;
 
     public event Func<Task>? UnmuteUserRequested;
 
@@ -64,8 +54,6 @@ public sealed class ServerViewModel : ViewModelBase
     private Func<Task>? _removeRequested;
 
     private Func<Task>? _createChannelRequested;
-
-    private Func<Task>? _deleteChannelRequested;
 
     private Func<Task>? _profileRequested;
 
@@ -85,13 +73,7 @@ public sealed class ServerViewModel : ViewModelBase
 
     public ReactiveCommand<Unit, Unit> CreateChannelCommand { get; }
 
-    public ReactiveCommand<Unit, Unit> DeleteChannelCommand { get; }
-
     public ReactiveCommand<Unit, Unit> ProfileCommand { get; }
-
-    public ReactiveCommand<Unit, Unit> LeaveChannelCommand { get; }
-
-    public ReactiveCommand<Unit, Unit> ClearHistoryCommand { get; }
 
     public ReactiveCommand<Unit, Unit> UnmuteUserCommand { get; }
 
@@ -203,10 +185,7 @@ public sealed class ServerViewModel : ViewModelBase
         DisconnectCommand = ReactiveCommand.CreateFromTask(DisconnectAsync);
         RemoveCommand = ReactiveCommand.CreateFromTask(RemoveAsync);
         CreateChannelCommand = ReactiveCommand.CreateFromTask(CreateChannelAsync);
-        DeleteChannelCommand = ReactiveCommand.CreateFromTask(DeleteChannelAsync);
         ProfileCommand = ReactiveCommand.CreateFromTask(OpenProfileAsync);
-        LeaveChannelCommand = ReactiveCommand.CreateFromTask(() => LeaveChannelRequested?.Invoke() ?? Task.CompletedTask);
-        ClearHistoryCommand = ReactiveCommand.CreateFromTask(() => ClearHistoryRequested?.Invoke() ?? Task.CompletedTask);
         UnmuteUserCommand = ReactiveCommand.CreateFromTask(() => UnmuteUserRequested?.Invoke() ?? Task.CompletedTask);
         UnbanUserCommand = ReactiveCommand.CreateFromTask(() => UnbanUserRequested?.Invoke() ?? Task.CompletedTask);
     }
@@ -248,14 +227,6 @@ public sealed class ServerViewModel : ViewModelBase
         if (_createChannelRequested is not null)
         {
             await _createChannelRequested();
-        }
-    }
-
-    private async Task DeleteChannelAsync()
-    {
-        if (_deleteChannelRequested is not null)
-        {
-            await _deleteChannelRequested();
         }
     }
 

@@ -698,10 +698,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             serverVm.DisconnectRequested += () => HandleServerDisconnectRequested(serverVm);
             serverVm.RemoveRequested += () => HandleServerRemoveRequested(serverVm);
             serverVm.CreateChannelRequested += () => HandleCreateChannelRequested(serverVm);
-            serverVm.DeleteChannelRequested += () => HandleDeleteChannelRequested(serverVm);
             serverVm.ProfileRequested += () => HandleProfileRequested(serverVm);
-            serverVm.LeaveChannelRequested += () => HandleLeaveChannelRequested(serverVm);
-            serverVm.ClearHistoryRequested += () => HandleClearHistoryRequested(serverVm);
             serverVm.UnmuteUserRequested += () => HandleUnmuteUserRequested(serverVm);
             serverVm.UnbanUserRequested += () => HandleUnbanUserRequested(serverVm);
             _ = serverVm.WhenAnyValue(s => s.SelectedChannel)
@@ -821,16 +818,9 @@ public sealed class MainWindowViewModel : ViewModelBase
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                ChannelViewModel? channel = FindChannelViewModel(serverUrl, channelName);
-                if (channel is null)
+                if (FindChannelViewModel(serverUrl, channelName) is { } channel)
                 {
-                    return;
-                }
-
-                channel.Topic = topic;
-                if (ReferenceEquals(channel, _openChannel))
-                {
-                    Chat.UpdateTopic(channel);
+                    ApplyChannelTopic(channel, topic);
                 }
             });
         };
@@ -1105,13 +1095,21 @@ public sealed class MainWindowViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Opens a channel from a #link, adding it to the list if it exists but isn't listed.</summary>
     public async Task OpenChannelAsync(string serverUrl, string channelName)
+    {
+        if (await TryOpenChannelAsync(serverUrl, channelName) is { } error)
+        {
+            ShowSystemMessage(error);
+        }
+    }
+
+    /// <summary>Opens a channel by name, adding it to the list if it exists but isn't listed. Returns what went wrong, if anything.</summary>
+    private async Task<string?> TryOpenChannelAsync(string serverUrl, string channelName)
     {
         ServerViewModel? server = Sidebar.GetServer(serverUrl);
         if (server is not { IsConnected: true })
         {
-            return;
+            return "Not connected to this server.";
         }
 
         ChannelViewModel? channel = FindListedChannel(server, channelName);
@@ -1124,14 +1122,12 @@ public sealed class MainWindowViewModel : ViewModelBase
             }
             catch (Exception ex)
             {
-                ShowSystemMessage($"Could not open #{channelName}: {ex.Message}");
-                return;
+                return $"Could not open #{channelName}: {ex.Message}";
             }
 
             if (meta is null)
             {
-                ShowSystemMessage($"#{channelName} doesn't exist.");
-                return;
+                return $"#{channelName} doesn't exist.";
             }
 
             channel = FindListedChannel(server, channelName);
@@ -1151,6 +1147,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         }
 
         server.SelectedChannel = channel;
+        return null;
     }
 
     private static ChannelViewModel? FindListedChannel(ServerViewModel server, string channelName)
@@ -1158,24 +1155,51 @@ public sealed class MainWindowViewModel : ViewModelBase
         return server.Channels.FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
     }
 
-    private async Task HandleLeaveChannelRequested(ServerViewModel server)
+    public async Task SetChannelTopicAsync(ServerViewModel server, ChannelViewModel channel)
     {
-        string channelName = Chat.CurrentChannelName;
-        if (string.IsNullOrEmpty(channelName) || !string.Equals(Chat.CurrentServerUrl, server.ServerUrl, StringComparison.OrdinalIgnoreCase))
+        TextPromptWindow dialog = new TextPromptWindow(
+            $"Topic for #{channel.Name}",
+            "Only the channel's creator can change its topic. Leave this empty to clear it.",
+            "Topic",
+            "Save",
+            channel.Topic,
+            ValidationConstants.MaxChannelTopicLength,
+            allowEmpty: true);
+        await dialog.ShowDialog(_mainWindow!);
+        if (dialog.Result is not { } text)
         {
-            await ShowErrorAsync("Leave Channel", "Open a channel on this server first.");
             return;
         }
 
-        if (string.Equals(channelName, HubConstants.DefaultChannel, StringComparison.OrdinalIgnoreCase))
-        {
-            await ShowErrorAsync("Leave Channel", $"You can't leave #{HubConstants.DefaultChannel}.");
-            return;
-        }
-
+        string? topic = text.Length == 0 ? null : text;
         try
         {
-            await ChannelService.LeaveChannelAsync(server.ServerUrl, channelName);
+            await ChannelService.SetChannelTopicAsync(server.ServerUrl, channel.Name, topic);
+            ApplyChannelTopic(channel, topic);
+        }
+        catch (Exception ex)
+        {
+            await ShowErrorAsync("Could Not Set Topic", ex.Message);
+        }
+    }
+
+    public async Task ClearChannelHistoryAsync(ServerViewModel server, ChannelViewModel channel)
+    {
+        IMsBox<ButtonResult> confirmBox = MessageBoxManager.GetMessageBoxStandard(
+            "Clear Channel History",
+            $"Delete all messages and attachments in #{channel.Name} for everyone?\nThis cannot be undone.",
+            ButtonEnum.YesNo);
+        if (await confirmBox.ShowWindowDialogAsync(_mainWindow) == ButtonResult.Yes)
+        {
+            await RunModerationAsync("Could Not Clear History", () => ChannelService.NukeChannelAsync(server.ServerUrl, channel.Name));
+        }
+    }
+
+    public async Task LeaveChannelAsync(ServerViewModel server, ChannelViewModel channel)
+    {
+        try
+        {
+            await ChannelService.LeaveChannelAsync(server.ServerUrl, channel.Name);
         }
         catch (Exception ex)
         {
@@ -1183,44 +1207,70 @@ public sealed class MainWindowViewModel : ViewModelBase
             return;
         }
 
+        channel.ClearUnread();
+
         // Moves away because a left channel can't be used, and opening it again rejoins it.
-        server.SelectedChannel = FindListedChannel(server, HubConstants.DefaultChannel);
+        if (ReferenceEquals(channel, _openChannel))
+        {
+            server.SelectedChannel = FindListedChannel(server, HubConstants.DefaultChannel);
+        }
     }
 
-    private async Task HandleClearHistoryRequested(ServerViewModel server)
+    public async Task DeleteChannelAsync(ServerViewModel server, ChannelViewModel channel)
     {
-        string channelName = Chat.CurrentChannelName;
-        if (string.IsNullOrEmpty(channelName) || !string.Equals(Chat.CurrentServerUrl, server.ServerUrl, StringComparison.OrdinalIgnoreCase))
+        IMsBox<ButtonResult> confirmBox = MessageBoxManager.GetMessageBoxStandard(
+            "Delete Channel",
+            $"Are you sure you want to delete #{channel.Name}?\nThis will remove all messages permanently.",
+            ButtonEnum.YesNo);
+        if (await confirmBox.ShowWindowDialogAsync(_mainWindow) != ButtonResult.Yes)
         {
-            await ShowErrorAsync("Clear Channel History", "Open a channel on this server first.");
             return;
         }
 
-        IMsBox<ButtonResult> confirmBox = MessageBoxManager.GetMessageBoxStandard(
-            "Clear Channel History",
-            $"Delete all messages and attachments in #{channelName} for everyone?\nThis cannot be undone.",
-            ButtonEnum.YesNo);
-        if (await confirmBox.ShowWindowDialogAsync(_mainWindow) == ButtonResult.Yes)
+        try
         {
-            await RunModerationAsync("Could Not Clear History", () => ChannelService.NukeChannelAsync(server.ServerUrl, channelName));
+            await ChannelService.DeleteChannelAsync(server.ServerUrl, channel.Name);
+        }
+        catch (Exception ex)
+        {
+            await ShowErrorAsync("Could Not Delete Channel", ex.Message);
+            return;
+        }
+
+        bool wasOpen = ReferenceEquals(channel, _openChannel);
+        _ = server.Channels.Remove(channel);
+        if (wasOpen)
+        {
+            server.SelectedChannel = FindListedChannel(server, HubConstants.DefaultChannel);
         }
     }
 
     private async Task HandleUnmuteUserRequested(ServerViewModel server)
     {
-        ModerationWindow dialog = ModerationWindow.ForUsername("Unmute User", "Enter the username to unmute.", "Unmute");
-        if (await dialog.ShowDialog<bool?>(_mainWindow!) == true)
+        TextPromptWindow dialog = new TextPromptWindow("Unmute User", "Enter the username to unmute.", "Username", "Unmute");
+        await dialog.ShowDialog(_mainWindow!);
+        if (dialog.Result is { } username)
         {
-            await UnmuteUserAsync(server.ServerUrl, dialog.ResultUsername!);
+            await UnmuteUserAsync(server.ServerUrl, username.TrimStart('@'));
         }
     }
 
     private async Task HandleUnbanUserRequested(ServerViewModel server)
     {
-        ModerationWindow dialog = ModerationWindow.ForUsername("Unban User", "Enter the username to unban.", "Unban");
-        if (await dialog.ShowDialog<bool?>(_mainWindow!) == true)
+        TextPromptWindow dialog = new TextPromptWindow("Unban User", "Enter the username to unban.", "Username", "Unban");
+        await dialog.ShowDialog(_mainWindow!);
+        if (dialog.Result is { } username)
         {
-            await UnbanUserAsync(server.ServerUrl, dialog.ResultUsername!);
+            await UnbanUserAsync(server.ServerUrl, username.TrimStart('@'));
+        }
+    }
+
+    private void ApplyChannelTopic(ChannelViewModel channel, string? topic)
+    {
+        channel.Topic = topic;
+        if (ReferenceEquals(channel, _openChannel))
+        {
+            Chat.UpdateTopic(channel);
         }
     }
 
@@ -1473,63 +1523,6 @@ public sealed class MainWindowViewModel : ViewModelBase
         catch (Exception ex)
         {
             await ShowErrorAsync("Error", $"Could not create channel:\n{ex.Message}");
-        }
-    }
-
-    private async Task HandleDeleteChannelRequested(ServerViewModel server)
-    {
-        if (_mainWindow is null)
-        {
-            return;
-        }
-
-        string channelName = Chat.CurrentChannelName;
-        if (string.IsNullOrEmpty(channelName) || !string.Equals(Chat.CurrentServerUrl, server.ServerUrl, StringComparison.OrdinalIgnoreCase))
-        {
-            Debug.WriteLine("No channel selected on this server");
-            return;
-        }
-
-        if (string.Equals(channelName, HubConstants.DefaultChannel, StringComparison.OrdinalIgnoreCase))
-        {
-            IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard(
-                "Cannot Delete", $"The #{HubConstants.DefaultChannel} channel cannot be deleted.", ButtonEnum.Ok);
-            _ = await box.ShowWindowDialogAsync(_mainWindow);
-            return;
-        }
-
-        IMsBox<ButtonResult> confirmBox = MessageBoxManager.GetMessageBoxStandard(
-            "Delete Channel",
-            $"Are you sure you want to delete #{channelName}?\nThis will remove all messages permanently.",
-            ButtonEnum.YesNo);
-        ButtonResult confirm = await confirmBox.ShowWindowDialogAsync(_mainWindow);
-        if (confirm != ButtonResult.Yes)
-        {
-            return;
-        }
-
-        try
-        {
-            await ChannelService.DeleteChannelAsync(server.ServerUrl, channelName);
-
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            {
-                ChannelViewModel? channelVm = server.Channels.FirstOrDefault(c => c.Name == channelName);
-                if (channelVm is not null)
-                {
-                    _ = server.Channels.Remove(channelVm);
-                }
-
-                ChannelViewModel? defaultChannel = server.Channels.FirstOrDefault(c => c.Name == HubConstants.DefaultChannel)
-                    ?? server.Channels.FirstOrDefault();
-                server.SelectedChannel = defaultChannel;
-
-                ShowSystemMessage($"Deleted #{channelName}");
-            });
-        }
-        catch (Exception ex)
-        {
-            await ShowErrorAsync("Error", $"Could not delete channel:\n{ex.Message}");
         }
     }
 

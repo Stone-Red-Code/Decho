@@ -5,7 +5,8 @@
              xmlns:i="https://github.com/projektanker/icons.avalonia"
              x:Class="Decho.Views.ChannelListView"
              x:DataType="vm:ServerViewModel">
-    <ListBox Background="Transparent"
+    <ListBox x:Name="ChannelList"
+             Background="Transparent"
              BorderThickness="0"
              Margin="0"
              ItemsSource="{Binding Channels}"

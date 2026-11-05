@@ -162,6 +162,14 @@ internal sealed class ChannelService : IChannelService
         }
     }
 
+    public async Task SetChannelTopicAsync(string serverUrl, string channelName, string? topic)
+    {
+        ServerConnection? entry = _store.Get(serverUrl);
+        if (entry is null) throw new InvalidOperationException("Not connected to server");
+
+        _ = await entry.ApiClient.UpdateChannelTopicAsync(channelName, topic);
+    }
+
     public async Task<ChannelCryptoDto?> GetChannelCryptoAsync(string serverUrl, string channelName)
     {
         ServerConnection? entry = _store.Get(serverUrl);

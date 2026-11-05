@@ -14,8 +14,6 @@ public sealed partial class ModerationWindow : Window
         new("Until unmuted", null),
     ];
 
-    public string? ResultUsername { get; private set; }
-
     public string? ResultReason { get; private set; }
 
     public int? ResultDurationMinutes { get; private set; }
@@ -49,24 +47,8 @@ public sealed partial class ModerationWindow : Window
         return window;
     }
 
-    public static ModerationWindow ForUsername(string title, string description, string confirmText)
-    {
-        ModerationWindow window = new ModerationWindow(title, description, confirmText);
-        window.UsernameBox.IsVisible = true;
-        window.Opened += (_, _) => window.UsernameBox.Focus();
-        return window;
-    }
-
     private void OnConfirmClicked(object? sender, RoutedEventArgs e)
     {
-        string username = UsernameBox.Text?.Trim().TrimStart('@') ?? string.Empty;
-        if (UsernameBox.IsVisible && username.Length == 0)
-        {
-            _ = UsernameBox.Focus();
-            return;
-        }
-
-        ResultUsername = username;
         ResultReason = string.IsNullOrWhiteSpace(ReasonBox.Text) ? null : ReasonBox.Text.Trim();
         ResultDurationMinutes = (DurationBox.SelectedItem as MuteDuration)?.Minutes;
         Close(true);

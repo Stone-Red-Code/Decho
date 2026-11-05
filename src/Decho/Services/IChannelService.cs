@@ -24,6 +24,9 @@ public interface IChannelService
 
     void UpdateChannelTopic(string serverUrl, string channelName, string? topic);
 
+    /// <summary>Changes the topic on the server, unlike <see cref="UpdateChannelTopic"/> which only changes the local copy.</summary>
+    Task SetChannelTopicAsync(string serverUrl, string channelName, string? topic);
+
     Task<ChannelCryptoDto?> GetChannelCryptoAsync(string serverUrl, string channelName);
 
     /// <summary>Returns null when the channel doesn't exist.</summary>
