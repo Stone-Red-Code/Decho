@@ -36,7 +36,8 @@ public partial class ChannelListView : UserControl
     private ContextMenu CreateContextMenu(ListBoxItem item)
     {
         MenuItem setTopicItem = CreateMenuItem(item, "Set Topic...", (mainVm, server, channel) => mainVm.SetChannelTopicAsync(server, channel));
-        MenuItem clearHistoryItem = CreateMenuItem(item, "Clear History...", (mainVm, server, channel) => mainVm.ClearChannelHistoryAsync(server, channel));
+        MenuItem passphraseItem = CreateMenuItem(item, "Change Passphrase...", (mainVm, server, channel) => mainVm.ChangePassphraseAsync(server, channel));
+        MenuItem clearHistoryItem =CreateMenuItem(item, "Clear History...", (mainVm, server, channel) => mainVm.ClearChannelHistoryAsync(server, channel));
         MenuItem leaveItem = CreateMenuItem(item, "Leave Channel", (mainVm, server, channel) => mainVm.LeaveChannelAsync(server, channel));
         MenuItem deleteItem = CreateMenuItem(item, "Delete Channel...", (mainVm, server, channel) => mainVm.DeleteChannelAsync(server, channel));
 
@@ -51,6 +52,7 @@ public partial class ChannelListView : UserControl
 
             bool isDefault = string.Equals(channel.Name, HubConstants.DefaultChannel, StringComparison.OrdinalIgnoreCase);
             setTopicItem.IsVisible = !channel.IsSystem;
+            passphraseItem.IsVisible = channel.IsEncrypted;
             clearHistoryItem.IsVisible = server.CanModerate;
             leaveItem.IsVisible = !isDefault;
             deleteItem.IsVisible = !isDefault && !channel.IsSystem;
@@ -58,6 +60,7 @@ public partial class ChannelListView : UserControl
             args.Cancel = !setTopicItem.IsVisible && !clearHistoryItem.IsVisible && !leaveItem.IsVisible;
         };
         menu.Items.Add(setTopicItem);
+        menu.Items.Add(passphraseItem);
         menu.Items.Add(clearHistoryItem);
         menu.Items.Add(leaveItem);
         menu.Items.Add(deleteItem);

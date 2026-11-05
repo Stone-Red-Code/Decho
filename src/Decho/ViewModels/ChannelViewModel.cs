@@ -44,6 +44,8 @@ public sealed class ChannelViewModel : ViewModelBase
 
     public bool IsNotProtected => !Model.IsProtected;
 
+    public bool IsEncrypted => Model.IsEncrypted;
+
     public bool IsSystem => Model.IsSystem;
 
     public bool IsNotSystem => !Model.IsSystem;

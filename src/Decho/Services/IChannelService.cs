@@ -24,6 +24,12 @@ public interface IChannelService
 
     Task SetChannelTopicAsync(string serverUrl, string channelName, string? topic);
 
+    /// <summary>
+    /// Re-wraps an encrypted channel's room key under a new passphrase. The room key itself
+    /// stays the same, so history stays readable. Needs the channel to be unlocked.
+    /// </summary>
+    Task ChangePassphraseAsync(string serverUrl, string channelName, string currentPassphrase, string newPassphrase);
+
     Task<ChannelCryptoDto?> GetChannelCryptoAsync(string serverUrl, string channelName);
 
     /// <summary>Returns null when the channel doesn't exist.</summary>

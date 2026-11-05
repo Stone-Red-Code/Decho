@@ -157,6 +157,33 @@ internal sealed class ChannelService : IChannelService
         _ = await entry.ApiClient.UpdateChannelTopicAsync(channelName, topic);
     }
 
+    public async Task ChangePassphraseAsync(string serverUrl, string channelName, string currentPassphrase, string newPassphrase)
+    {
+        ServerConnection? entry = _store.Get(serverUrl);
+        if (entry is null) throw new InvalidOperationException("Not connected to server");
+
+        ChannelCryptoDto? crypto = await entry.ApiClient.GetChannelCryptoAsync(channelName);
+        if (crypto is not { IsEncrypted: true, EncryptionSalt: { } salt })
+        {
+            throw new InvalidOperationException($"#{channelName} isn't end-to-end encrypted.");
+        }
+
+        if (!entry.Manager.RoomKeys.TryGetKey(channelName, out byte[]? roomKey))
+        {
+            throw new InvalidOperationException("Open the channel and unlock it with its passphrase first.");
+        }
+
+        RoomCrypto.DerivedKeys current = RoomCrypto.DeriveKeys(currentPassphrase, Convert.FromBase64String(salt));
+        byte[] newSalt = RoomCrypto.GenerateSalt();
+        RoomCrypto.DerivedKeys updated = RoomCrypto.DeriveKeys(newPassphrase, newSalt);
+
+        _ = await entry.ApiClient.RekeyChannelAsync(channelName, new RekeyChannelRequest(
+            current.AuthKeyHex,
+            updated.AuthKeyHex,
+            Convert.ToBase64String(newSalt),
+            RoomCrypto.WrapRoomKey(roomKey, updated.KeyEncryptionKey)));
+    }
+
     public async Task<ChannelCryptoDto?> GetChannelCryptoAsync(string serverUrl, string channelName)
     {
         ServerConnection? entry = _store.Get(serverUrl);

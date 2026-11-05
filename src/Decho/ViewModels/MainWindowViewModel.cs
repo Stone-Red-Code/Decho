@@ -793,6 +793,28 @@ public sealed class MainWindowViewModel : ViewModelBase
         }
     }
 
+    public async Task ChangePassphraseAsync(ServerViewModel server, ChannelViewModel channel)
+    {
+        ChangePassphraseWindow dialog = new ChangePassphraseWindow(channel.Name);
+        if (await dialog.ShowDialog<bool?>(_mainWindow!) != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await ChannelService.ChangePassphraseAsync(
+                server.ServerUrl, channel.Name, dialog.ResultCurrentPassphrase!, dialog.ResultNewPassphrase!);
+        }
+        catch (Exception ex)
+        {
+            await ShowErrorAsync("Could Not Change Passphrase", ex.Message);
+            return;
+        }
+
+        await ShowInfoAsync("Passphrase Changed", $"#{channel.Name} now uses the new passphrase.");
+    }
+
     public async Task ClearChannelHistoryAsync(ServerViewModel server, ChannelViewModel channel)
     {
         IMsBox<ButtonResult> confirmBox = MessageBoxManager.GetMessageBoxStandard(
