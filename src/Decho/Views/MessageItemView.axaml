@@ -34,22 +34,12 @@
 			<Setter Property="Opacity" Value="0.5" />
 		</Style>
 	</UserControl.Styles>
-	<Grid Classes="message"
+	<Grid x:Name="MessageGrid"
+		  Classes="message"
 		  Classes.continuation="{Binding IsGroupContinuation}"
 		  ColumnDefinitions="44, *"
-		  Background="Transparent">
-		<Grid.ContextMenu>
-			<ContextMenu Opening="OnContextMenuOpening">
-				<MenuItem x:Name="ReplyMenuItem" Header="Reply" Click="OnReplyMenuClick" />
-				<MenuItem x:Name="MentionMenuItem" Header="Mention" Click="OnMentionMenuClick" />
-				<MenuItem x:Name="ProfileMenuItem" Header="View profile" Click="OnProfileMenuClick" />
-				<Separator x:Name="ActionsSeparator" />
-				<MenuItem x:Name="CopyTextMenuItem" Header="Copy text" Click="OnCopyTextMenuClick" />
-				<MenuItem x:Name="CopyIdMenuItem" Header="Copy message ID" Click="OnCopyIdMenuClick" />
-				<Separator x:Name="DeleteSeparator" />
-				<MenuItem x:Name="DeleteMenuItem" Header="Delete message" Click="OnDeleteMenuClick" />
-			</ContextMenu>
-		</Grid.ContextMenu>
+		  Background="Transparent"
+		  PointerPressed="OnMessageGridPointerPressed">
 		<Border Classes="hoverBackground"
 				Grid.ColumnSpan="2"
 				Background="#18808080"
@@ -117,6 +107,7 @@
 					<DataTemplate x:DataType="dto:AttachmentDto">
 						<StackPanel Margin="0 2 0 2">
 							<Image Loaded="OnAttachmentImageLoaded"
+								   DataContextChanged="OnAttachmentImageDataContextChanged"
 								   MaxHeight="300"
 								   MaxWidth="400"
 								   HorizontalAlignment="Left"

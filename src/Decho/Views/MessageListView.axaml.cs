@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
-using Avalonia.VisualTree;
 
 using Decho.ViewModels;
 
@@ -17,9 +16,10 @@ public partial class MessageListView : UserControl
     private ChatViewModel? _chat;
     private ObservableCollection<MessageViewModel>? _observedMessages;
     private bool _hasPendingScroll;
-    private bool _wasAtBottom;
+    private bool _wasAtBottom = true;
     private bool _loadingMore;
     private double _loadingMoreExtent;
+    private string? _loadingMoreAnchorId;
 
     private MessageViewModel? _highlightedMessage;
 
@@ -35,11 +35,15 @@ public partial class MessageListView : UserControl
     {
         if (_chat is null) return;
 
-        MessageViewModel? target = _chat.Messages.FirstOrDefault(m => m.Model.Id == messageId);
-        if (target is null) return;
+        int index = IndexOfMessage(messageId);
+        if (index < 0) return;
 
+        MessageViewModel target = _chat.Messages[index];
         ScrollViewer? scroll = this.FindControl<ScrollViewer>("MessageScrollViewer");
-        if (scroll is null) return;
+        ItemsControl? items = this.FindControl<ItemsControl>("MessageItemsControl");
+        if (scroll is null || items is null) return;
+
+        _wasAtBottom = false;
 
         ClearHighlight();
         target.IsHighlighted = true;
@@ -49,9 +53,17 @@ public partial class MessageListView : UserControl
 
         Dispatcher.UIThread.Post(() =>
         {
-            double? targetY = FindItemY(scroll, target);
-            if (targetY is not null)
-                scroll.Offset = new Vector(scroll.Offset.X, targetY.Value);
+            int currentIndex = IndexOfMessage(messageId);
+            if (currentIndex < 0) return;
+
+            if (items.ItemsPanelRoot is VirtualizingMessagePanel panel)
+            {
+                panel.ScrollToIndex(scroll, currentIndex);
+            }
+            else
+            {
+                items.ScrollIntoView(currentIndex);
+            }
         }, DispatcherPriority.Render);
 
         _ = Task.Run(async () =>
@@ -75,39 +87,43 @@ public partial class MessageListView : UserControl
     /// <summary>Scrolls to a message without highlighting it, unless it is already in view.</summary>
     public void RevealMessage(string messageId)
     {
-        MessageViewModel? target = _chat?.Messages.FirstOrDefault(m => m.Model.Id == messageId);
+        int index = IndexOfMessage(messageId);
         ScrollViewer? scroll = this.FindControl<ScrollViewer>("MessageScrollViewer");
-        if (target is null || scroll is null) return;
+        ItemsControl? items = this.FindControl<ItemsControl>("MessageItemsControl");
+        if (index < 0 || scroll is null || items is null) return;
 
         // Set now so that layout from the newly added messages doesn't scroll back to the end.
         _wasAtBottom = false;
 
         Dispatcher.UIThread.Post(() =>
         {
-            double? targetY = FindItemY(scroll, target);
-            if (targetY is null) return;
+            int currentIndex = IndexOfMessage(messageId);
+            if (currentIndex < 0) return;
 
-            bool isInView = targetY >= scroll.Offset.Y && targetY + RevealMargin <= scroll.Offset.Y + scroll.Viewport.Height;
-            if (!isInView)
+            if (items.ItemsPanelRoot is VirtualizingMessagePanel panel)
             {
-                scroll.Offset = new Vector(scroll.Offset.X, Math.Max(targetY.Value - RevealMargin, 0));
+                double itemY = panel.GetItemY(currentIndex);
+                bool isInView = itemY >= scroll.Offset.Y && itemY + RevealMargin <= scroll.Offset.Y + scroll.Viewport.Height;
+                if (!isInView)
+                {
+                    panel.ScrollToIndex(scroll, currentIndex, RevealMargin);
+                }
             }
         }, DispatcherPriority.Background);
     }
 
-    private static double? FindItemY(Visual parent, MessageViewModel target)
+    private int IndexOfMessage(string messageId)
     {
-        foreach (Visual child in parent.GetVisualChildren())
-        {
-            if (child.DataContext == target)
-                return child.Bounds.Y;
+        if (_chat is null) return -1;
 
-            double? result = FindItemY(child, target);
-            if (result.HasValue)
-                return result;
+        ObservableCollection<MessageViewModel> messages = _chat.Messages;
+        for (int i = 0; i < messages.Count; i++)
+        {
+            if (messages[i].Model.Id == messageId)
+                return i;
         }
 
-        return null;
+        return -1;
     }
 
     private void OnDataContextChanged(object? sender, EventArgs args)
@@ -142,17 +158,31 @@ public partial class MessageListView : UserControl
 
         _loadingMore = true;
         _loadingMoreExtent = scroll.Extent.Height;
+        _loadingMoreAnchorId = _chat?.Messages.FirstOrDefault()?.Model.Id;
     }
 
     private void OnScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
-        if (e.ExtentDelta.Y > 0 && _wasAtBottom)
-        {
-            ScrollViewer scroll = (ScrollViewer)sender!;
-            Dispatcher.UIThread.Post(scroll.ScrollToEnd, DispatcherPriority.Background);
-        }
-
         ScrollViewer scrollViewer = (ScrollViewer)sender!;
+
+        if (e.OffsetDelta.Y < -0.5)
+        {
+            _wasAtBottom = false;
+        }
+        else if (e.OffsetDelta.Y > 0.5)
+        {
+            _wasAtBottom = scrollViewer.Offset.Y + scrollViewer.Viewport.Height >= scrollViewer.Extent.Height - 10;
+        }
+        else if (e.ExtentDelta.Y > 0 && _wasAtBottom)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_wasAtBottom)
+                {
+                    scrollViewer.ScrollToEnd();
+                }
+            }, DispatcherPriority.Background);
+        }
 
         if (!_loadingMore && _chat is not null && !_chat.IsLoadingMore
             && scrollViewer.Offset.Y <= 0
@@ -160,8 +190,6 @@ public partial class MessageListView : UserControl
         {
             _chat.LoadMoreRequested?.Invoke();
         }
-
-        _wasAtBottom = scrollViewer.Offset.Y + scrollViewer.Viewport.Height >= scrollViewer.Extent.Height - 30;
     }
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -186,7 +214,7 @@ public partial class MessageListView : UserControl
 
     private void OnMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (e.Action == NotifyCollectionChangedAction.Add)
+        if (e.Action == NotifyCollectionChangedAction.Add && e.NewStartingIndex > 0)
         {
             TryAutoScroll();
         }
@@ -195,31 +223,64 @@ public partial class MessageListView : UserControl
     private void RestoreScrollPosition()
     {
         ScrollViewer? scroll = this.FindControl<ScrollViewer>("MessageScrollViewer");
+        ItemsControl? items = this.FindControl<ItemsControl>("MessageItemsControl");
         if (scroll is null) return;
+
+        string? anchorId = _loadingMoreAnchorId;
+        double oldExtent = _loadingMoreExtent;
 
         Dispatcher.UIThread.Post(() =>
         {
-            double delta = scroll.Extent.Height - _loadingMoreExtent;
-            scroll.Offset = new Vector(scroll.Offset.X, scroll.Offset.Y + delta);
+            if (scroll.Offset.Y < 10)
+            {
+                if (anchorId is not null && items?.ItemsPanelRoot is VirtualizingMessagePanel panel)
+                {
+                    int anchorIndex = IndexOfMessage(anchorId);
+                    if (anchorIndex > 0)
+                    {
+                        panel.ScrollToIndex(scroll, anchorIndex);
+                    }
+                }
+                else
+                {
+                    double delta = scroll.Extent.Height - oldExtent;
+                    if (delta > 0)
+                    {
+                        scroll.Offset = new Vector(scroll.Offset.X, scroll.Offset.Y + delta);
+                    }
+                }
+            }
+
             _loadingMore = false;
+            _loadingMoreAnchorId = null;
         }, DispatcherPriority.Background);
     }
 
     private void TryAutoScroll()
     {
         ScrollViewer? scroll = this.FindControl<ScrollViewer>("MessageScrollViewer");
+        ItemsControl? items = this.FindControl<ItemsControl>("MessageItemsControl");
         if (scroll is null)
         {
             return;
         }
 
-        _wasAtBottom = scroll.Offset.Y + scroll.Viewport.Height >= scroll.Extent.Height - 30;
         if (_wasAtBottom && !_hasPendingScroll)
         {
             _hasPendingScroll = true;
             Dispatcher.UIThread.Post(() =>
             {
-                scroll.ScrollToEnd();
+                if (_wasAtBottom)
+                {
+                    if (items?.ItemsPanelRoot is VirtualizingMessagePanel panel)
+                    {
+                        panel.ScrollToEnd(scroll);
+                    }
+                    else
+                    {
+                        scroll.ScrollToEnd();
+                    }
+                }
                 _hasPendingScroll = false;
             }, DispatcherPriority.Background);
         }
@@ -228,13 +289,24 @@ public partial class MessageListView : UserControl
     private void ScrollToBottom()
     {
         ScrollViewer? scroll = this.FindControl<ScrollViewer>("MessageScrollViewer");
+        ItemsControl? items = this.FindControl<ItemsControl>("MessageItemsControl");
         if (scroll is null)
         {
             return;
         }
 
         _wasAtBottom = true;
-        Dispatcher.UIThread.Post(scroll.ScrollToEnd, DispatcherPriority.Background);
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (items?.ItemsPanelRoot is VirtualizingMessagePanel panel)
+            {
+                panel.ScrollToEnd(scroll);
+            }
+            else
+            {
+                scroll.ScrollToEnd();
+            }
+        }, DispatcherPriority.Background);
     }
 
     private void ClearHighlight()

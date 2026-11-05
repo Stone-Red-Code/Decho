@@ -181,6 +181,10 @@ public sealed class ChannelViewModel : ViewModelBase
     public void ClearMessages()
     {
         _unreadMarker = null;
+        foreach (MessageViewModel message in Messages)
+        {
+            message.DisposeImages();
+        }
         Model.Messages.Clear();
         Messages.Clear();
     }
@@ -211,6 +215,7 @@ public sealed class ChannelViewModel : ViewModelBase
                 _unreadMarker?.ShowUnreadMarker = true;
             }
 
+            message.DisposeImages();
             _ = Model.Messages.Remove(message.Model);
             _ = Messages.Remove(message);
         }
@@ -242,6 +247,7 @@ public sealed class ChannelViewModel : ViewModelBase
         Messages.CollectionChanged -= OnMessagesChanged;
         for (int i = firstKept - 1; i >= 0; i--)
         {
+            Messages[i].DisposeImages();
             _ = Model.Messages.Remove(Messages[i].Model);
             Messages.RemoveAt(i);
         }
@@ -259,10 +265,14 @@ public sealed class ChannelViewModel : ViewModelBase
             return;
         }
 
+        Messages.CollectionChanged -= OnMessagesChanged;
         foreach (MessageModel msg in fresh)
         {
             Model.Messages.Insert(0, msg);
             Messages.Insert(0, new MessageViewModel(msg));
         }
+        Messages.CollectionChanged += OnMessagesChanged;
+
+        UpdateMessageGrouping();
     }
 }

@@ -325,14 +325,20 @@ internal sealed class ChannelService : IChannelService
         return RoomCrypto.DeriveKeys(password, salt).AuthKeyHex;
     }
 
-    private static MessageModel MessageModelFromDto(MessageDto dto, ServerConnection entry)
+    internal static MessageModel MessageModelFromDto(MessageDto dto, ServerConnection entry)
     {
         UserModel author = new UserModel(
             dto.SenderUsername,
             dto.SenderDisplayName ?? dto.SenderUsername,
             dto.SenderNicknameColor);
 
-        List<AttachmentDto> attachments = dto.Attachments ?? [];
+        List<AttachmentDto> attachments = dto.Attachments is { Count: > 0 }
+            ? dto.Attachments.Select(a => a.AsciiPreview is null ? a : a with { AsciiPreview = null }).ToList()
+            : [];
+
+        List<EmbedDto> embeds = dto.Embeds is { Count: > 0 }
+            ? dto.Embeds.Select(e => e.ImageAscii is null ? e : e with { ImageAscii = null }).ToList()
+            : [];
 
         return new MessageModel(
             dto.Id.ToString("N"),
@@ -343,6 +349,6 @@ internal sealed class ChannelService : IChannelService
             entry.Server.ServerUrl,
             attachments,
             dto.ReplyTo,
-            dto.Embeds);
+            embeds);
     }
 }

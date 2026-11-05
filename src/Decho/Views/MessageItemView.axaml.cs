@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
@@ -22,11 +23,28 @@ namespace Decho.Views;
 
 public partial class MessageItemView : UserControl
 {
+    private const int MaxPreviewDecodeWidth = 800;
+    private const double MaxImageDisplayWidth = 400;
+    private const double MaxImageDisplayHeight = 300;
+
     private static readonly Regex MentionRegex = new(@"@(\w+)", RegexOptions.Compiled);
     private static readonly Regex ChannelRegex = new(@"(?<!\w)#([\w-]+)", RegexOptions.Compiled);
     private static readonly Regex UrlRegex = new(@"https?://[^\s]+", RegexOptions.Compiled);
+    private static readonly Cursor HandCursor = new(StandardCursorType.Hand);
+
+    private readonly List<Image> _attachmentImages = [];
+    private readonly HashSet<Image> _loadingImages = [];
     private CancellationTokenSource? _loadCts;
     private string? _loadedMessageId;
+
+    private MenuItem? _replyMenuItem;
+    private MenuItem? _mentionMenuItem;
+    private MenuItem? _profileMenuItem;
+    private Separator? _actionsSeparator;
+    private MenuItem? _copyTextMenuItem;
+    private MenuItem? _copyIdMenuItem;
+    private Separator? _deleteSeparator;
+    private MenuItem? _deleteMenuItem;
 
     public MessageItemView()
     {
@@ -57,26 +75,112 @@ public partial class MessageItemView : UserControl
         _loadCts = new CancellationTokenSource();
         _loadedMessageId = null;
 
+        foreach (Image image in _attachmentImages)
+        {
+            image.Source = null;
+        }
+        _attachmentImages.Clear();
+        _loadingImages.Clear();
+
         if (DataContext is MessageViewModel msg)
         {
             _loadedMessageId = msg.Model.Id;
             BuildMessageInlines(msg.DisplayContent);
 
             TextBlock? replyQuote = ReplyQuote;
-            if (replyQuote is not null && msg.ReplyTo is { } reply)
+            if (replyQuote is not null)
             {
-                replyQuote.Text = $"\u2514 {reply.SenderUsername}: {reply.Content.Replace('\n', ' ')[..Math.Min(100, reply.Content.Length)]}";
+                replyQuote.Text = msg.ReplyTo is { } reply
+                    ? $"\u2514 {reply.SenderUsername}: {reply.Content.Replace('\n', ' ')[..Math.Min(100, reply.Content.Length)]}"
+                    : string.Empty;
+            }
+        }
+        else
+        {
+            MessageContent?.ClearSelection();
+            MessageContent?.Inlines?.Clear();
+            MessageContent?.Text = null;
+            if (ReplyQuote is { } replyQuote)
+            {
+                replyQuote.Text = string.Empty;
             }
         }
     }
 
-    private async Task<Bitmap?> GetOrDownloadImageAsync(MessageViewModel msg, AttachmentDto att)
+    private static Size CalculateDisplaySize(double pixelWidth, double pixelHeight)
     {
-        if (msg.ImageCache.TryGetValue(att.Url, out Bitmap? cached))
+        if (pixelWidth <= 0 || pixelHeight <= 0)
+        {
+            return new Size(MaxImageDisplayWidth, MaxImageDisplayHeight);
+        }
+
+        double scale = Math.Min(1.0, Math.Min(MaxImageDisplayWidth / pixelWidth, MaxImageDisplayHeight / pixelHeight));
+        return new Size(Math.Round(pixelWidth * scale), Math.Round(pixelHeight * scale));
+    }
+
+    private static void ApplyImageDimensions(Image image, MessageViewModel msg, AttachmentDto att, Bitmap? bitmap = null)
+    {
+        if (!msg.AttachmentSizes.TryGetValue(att.Url, out Size displaySize))
+        {
+            if (bitmap is not null)
+            {
+                displaySize = CalculateDisplaySize(bitmap.PixelSize.Width, bitmap.PixelSize.Height);
+                msg.AttachmentSizes[att.Url] = displaySize;
+            }
+            else
+            {
+                image.Width = double.NaN;
+                image.Height = double.NaN;
+                return;
+            }
+        }
+
+        image.Width = displaySize.Width;
+        image.Height = displaySize.Height;
+    }
+
+    private async Task<Bitmap?> GetOrDownloadImageAsync(MessageViewModel msg, AttachmentDto att, CancellationToken ct = default)
+    {
+        if (msg.TryGetCachedImage(att.Url, out Bitmap? cached) && cached is not null)
         {
             return cached;
         }
 
+        MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
+        if (mainVm is null)
+        {
+            return null;
+        }
+
+        byte[]? bytes = await mainVm.ConnectionService.DownloadImageBytesAsync(
+            ResolveServerUrl(), msg.Model.ChannelName, att.Url);
+
+        if (bytes is null || bytes.Length == 0 || ct.IsCancellationRequested)
+        {
+            return null;
+        }
+
+        using MemoryStream stream = new MemoryStream(bytes);
+        SixLabors.ImageSharp.ImageInfo? info = SixLabors.ImageSharp.Image.Identify(stream);
+        stream.Position = 0;
+
+        Bitmap bitmap = info is not null && info.Width > MaxPreviewDecodeWidth
+            ? Bitmap.DecodeToWidth(stream, MaxPreviewDecodeWidth)
+            : new Bitmap(stream);
+
+        if (ct.IsCancellationRequested)
+        {
+            bitmap.Dispose();
+            return null;
+        }
+
+        msg.AttachmentSizes[att.Url] = CalculateDisplaySize(bitmap.PixelSize.Width, bitmap.PixelSize.Height);
+        msg.StoreCachedImage(att.Url, bitmap);
+        return bitmap;
+    }
+
+    private async Task<Bitmap?> DownloadFullImageAsync(MessageViewModel msg, AttachmentDto att)
+    {
         MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
         if (mainVm is null)
         {
@@ -92,9 +196,7 @@ public partial class MessageItemView : UserControl
         }
 
         using MemoryStream stream = new MemoryStream(bytes);
-        Bitmap bitmap = new Bitmap(stream);
-        msg.ImageCache[att.Url] = bitmap;
-        return bitmap;
+        return new Bitmap(stream);
     }
 
     private async Task OpenProfileAsync(string username, string serverUrl)
@@ -116,7 +218,16 @@ public partial class MessageItemView : UserControl
             return;
         }
 
+        tb.ClearSelection();
         tb.Inlines?.Clear();
+
+        if (!content.Contains('@') && !content.Contains('#') && !content.Contains("http", StringComparison.OrdinalIgnoreCase))
+        {
+            tb.Text = content;
+            return;
+        }
+
+        tb.Text = null;
 
         IEnumerable<Match> mentionMatches = MentionRegex.Matches(content).Cast<Match>();
         IEnumerable<Match> channelMatches = ChannelRegex.Matches(content).Cast<Match>();
@@ -124,6 +235,12 @@ public partial class MessageItemView : UserControl
         List<Match> allMatches = mentionMatches.Concat(channelMatches).Concat(urlMatches)
             .OrderBy(m => m.Index)
             .ToList();
+
+        if (allMatches.Count == 0)
+        {
+            tb.Text = content;
+            return;
+        }
 
         int lastIndex = 0;
         foreach (Match match in allMatches)
@@ -142,7 +259,7 @@ public partial class MessageItemView : UserControl
             {
                 Text = match.Value,
                 FontWeight = FontWeight.Bold,
-                Cursor = new Cursor(StandardCursorType.Hand),
+                Cursor = HandCursor,
                 Padding = new Thickness(0),
                 LineHeight = double.NaN,
             };
@@ -210,6 +327,57 @@ public partial class MessageItemView : UserControl
         return e.GetCurrentPoint(null).Properties.IsLeftButtonPressed;
     }
 
+    private void OnMessageGridPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed && MessageGrid.ContextMenu is null)
+        {
+            EnsureContextMenu();
+        }
+    }
+
+    private void EnsureContextMenu()
+    {
+        if (MessageGrid.ContextMenu is not null)
+        {
+            return;
+        }
+
+        _replyMenuItem = new MenuItem { Header = "Reply" };
+        _replyMenuItem.Click += OnReplyMenuClick;
+
+        _mentionMenuItem = new MenuItem { Header = "Mention" };
+        _mentionMenuItem.Click += OnMentionMenuClick;
+
+        _profileMenuItem = new MenuItem { Header = "View profile" };
+        _profileMenuItem.Click += OnProfileMenuClick;
+
+        _actionsSeparator = new Separator();
+
+        _copyTextMenuItem = new MenuItem { Header = "Copy text" };
+        _copyTextMenuItem.Click += OnCopyTextMenuClick;
+
+        _copyIdMenuItem = new MenuItem { Header = "Copy message ID" };
+        _copyIdMenuItem.Click += OnCopyIdMenuClick;
+
+        _deleteSeparator = new Separator();
+
+        _deleteMenuItem = new MenuItem { Header = "Delete message" };
+        _deleteMenuItem.Click += OnDeleteMenuClick;
+
+        ContextMenu menu = new ContextMenu();
+        menu.Opening += OnContextMenuOpening;
+        menu.Items.Add(_replyMenuItem);
+        menu.Items.Add(_mentionMenuItem);
+        menu.Items.Add(_profileMenuItem);
+        menu.Items.Add(_actionsSeparator);
+        menu.Items.Add(_copyTextMenuItem);
+        menu.Items.Add(_copyIdMenuItem);
+        menu.Items.Add(_deleteSeparator);
+        menu.Items.Add(_deleteMenuItem);
+
+        MessageGrid.ContextMenu = menu;
+    }
+
     private void OnContextMenuOpening(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         MainWindowViewModel? mainVm = this.GetMainWindowViewModel();
@@ -223,16 +391,16 @@ public partial class MessageItemView : UserControl
         bool canCompose = isRemote && mainVm.Chat.Composer.IsEditable;
         bool isConnected = mainVm.Sidebar.GetServer(ResolveServerUrl())?.IsConnected ?? false;
 
-        ReplyMenuItem.IsVisible = canCompose;
-        MentionMenuItem.IsVisible = canCompose;
-        ProfileMenuItem.IsVisible = isRemote && isConnected;
-        ActionsSeparator.IsVisible = canCompose || ProfileMenuItem.IsVisible;
+        _replyMenuItem!.IsVisible = canCompose;
+        _mentionMenuItem!.IsVisible = canCompose;
+        _profileMenuItem!.IsVisible = isRemote && isConnected;
+        _actionsSeparator!.IsVisible = canCompose || _profileMenuItem.IsVisible;
 
-        CopyTextMenuItem.IsVisible = msg.ShowContent;
-        CopyIdMenuItem.IsVisible = isRemote;
+        _copyTextMenuItem!.IsVisible = msg.ShowContent;
+        _copyIdMenuItem!.IsVisible = isRemote;
 
-        DeleteMenuItem.IsVisible = mainVm.CanDeleteMessage(msg);
-        DeleteSeparator.IsVisible = DeleteMenuItem.IsVisible;
+        _deleteMenuItem!.IsVisible = mainVm.CanDeleteMessage(msg);
+        _deleteSeparator!.IsVisible = _deleteMenuItem.IsVisible;
     }
 
     private void OnReplyMenuClick(object? sender, RoutedEventArgs e)
@@ -332,45 +500,86 @@ public partial class MessageItemView : UserControl
         mainVm.Sidebar.SelectedChannel = channel;
     }
 
-    private async void OnAttachmentImageLoaded(object? sender, RoutedEventArgs e)
+    private void OnAttachmentImageLoaded(object? sender, RoutedEventArgs e)
     {
-        if (sender is not Image image)
+        if (sender is Image image)
         {
+            PrepareAttachmentImage(image);
+        }
+    }
+
+    private void OnAttachmentImageDataContextChanged(object? sender, EventArgs e)
+    {
+        if (sender is Image image)
+        {
+            PrepareAttachmentImage(image);
+        }
+    }
+
+    private void PrepareAttachmentImage(Image image)
+    {
+        if (image.DataContext is not AttachmentDto att || att.Kind != AttachmentKind.Image || DataContext is not MessageViewModel msg)
+        {
+            image.Source = null;
+            image.Width = double.NaN;
+            image.Height = double.NaN;
             return;
         }
 
-        if (image.DataContext is not AttachmentDto att)
+        if (!_attachmentImages.Contains(image))
         {
+            _attachmentImages.Add(image);
+        }
+
+        ApplyImageDimensions(image, msg, att);
+
+        if (msg.TryGetCachedImage(att.Url, out Bitmap? cached) && cached is not null)
+        {
+            ApplyImageDimensions(image, msg, att, cached);
+            image.Source = cached;
             return;
         }
 
-        if (att.Kind != AttachmentKind.Image)
-        {
-            return;
-        }
+        image.Source = null;
+        _ = LoadAttachmentImageAsync(image);
+    }
 
-        if (DataContext is not MessageViewModel msg)
-        {
-            return;
-        }
-
-        if (_loadCts is null)
+    private async Task LoadAttachmentImageAsync(Image image)
+    {
+        if (image.Source is not null || !_loadingImages.Add(image))
         {
             return;
         }
 
         try
         {
-            Bitmap? bitmap = await GetOrDownloadImageAsync(msg, att);
-            _loadCts.Token.ThrowIfCancellationRequested();
-            if (bitmap is not null)
+            if (image.DataContext is not AttachmentDto att || att.Kind != AttachmentKind.Image)
             {
+                return;
+            }
+
+            if (DataContext is not MessageViewModel msg || _loadCts is null)
+            {
+                return;
+            }
+
+            CancellationToken ct = _loadCts.Token;
+            Bitmap? bitmap = await GetOrDownloadImageAsync(msg, att, ct);
+            ct.ThrowIfCancellationRequested();
+
+            if (bitmap is not null && ReferenceEquals(DataContext, msg) && ReferenceEquals(image.DataContext, att))
+            {
+                ApplyImageDimensions(image, msg, att, bitmap);
                 image.Source = bitmap;
             }
         }
         catch
         {
             // Image failed to load filename is shown as fallback
+        }
+        finally
+        {
+            _loadingImages.Remove(image);
         }
     }
 
@@ -464,15 +673,18 @@ public partial class MessageItemView : UserControl
             return;
         }
 
-        Bitmap? bitmap = await GetOrDownloadImageAsync(msg, att);
-        if (bitmap is null)
+        Bitmap? fullBitmap = await DownloadFullImageAsync(msg, att);
+        Bitmap? displayBitmap = fullBitmap ?? await GetOrDownloadImageAsync(msg, att);
+        if (displayBitmap is null)
         {
+            fullBitmap?.Dispose();
             return;
         }
 
         Window? parent = this.GetParentWindow();
         if (parent is null)
         {
+            fullBitmap?.Dispose();
             return;
         }
 
@@ -489,8 +701,15 @@ public partial class MessageItemView : UserControl
                 serverUrl, channelName, att.Url, att.FileName);
         };
 
-        ImageViewerWindow viewer = new ImageViewerWindow(bitmap, att.FileName, downloadAsync);
-        await viewer.ShowDialog(parent);
+        try
+        {
+            ImageViewerWindow viewer = new ImageViewerWindow(displayBitmap, att.FileName, downloadAsync);
+            await viewer.ShowDialog(parent);
+        }
+        finally
+        {
+            fullBitmap?.Dispose();
+        }
     }
 
     private void OnReplyPointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
@@ -564,15 +783,7 @@ public partial class MessageItemView : UserControl
                     ChannelViewModel? channelVm = mainVm.Sidebar.GetServer(serverUrl)?.Channels
                         .FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
-                    if (channelVm is not null)
-                    {
-                        HashSet<string> existing = channelVm.Messages.Select(m => m.Model.Id).ToHashSet();
-                        foreach (MessageModel m in allMessages)
-                        {
-                            if (!existing.Contains(m.Id))
-                                channelVm.AddMessage(m);
-                        }
-                    }
+                    channelVm?.InsertMessages(allMessages);
 
                     await Task.Delay(50);
                 }

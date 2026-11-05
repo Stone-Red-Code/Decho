@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 
@@ -9,7 +10,13 @@ namespace Decho.ViewModels;
 
 public sealed class MessageViewModel(MessageModel model) : ViewModelBase
 {
+    private const int MaxTotalCachedImages = 25;
     private static readonly TimeSpan GroupingWindow = TimeSpan.FromMinutes(7);
+    private static readonly Lock CacheLock = new();
+    private static readonly LinkedList<(MessageViewModel Owner, string Url, Bitmap Bitmap)> LruImages = new();
+
+    private IBrush? _authorColor;
+    private bool _authorColorResolved;
 
     public MessageModel Model { get; } = model;
 
@@ -21,20 +28,29 @@ public sealed class MessageViewModel(MessageModel model) : ViewModelBase
     {
         get
         {
+            if (_authorColorResolved)
+            {
+                return _authorColor;
+            }
+
+            _authorColorResolved = true;
             string? color = Model.Author.NicknameColor;
             if (string.IsNullOrEmpty(color))
             {
-                return Brushes.White;
+                _authorColor = Brushes.White;
+                return _authorColor;
             }
 
             try
             {
-                return new SolidColorBrush(Color.Parse(color));
+                _authorColor = new SolidColorBrush(Color.Parse(color));
             }
             catch
             {
-                return null;
+                _authorColor = null;
             }
+
+            return _authorColor;
         }
     }
 
@@ -53,6 +69,8 @@ public sealed class MessageViewModel(MessageModel model) : ViewModelBase
     public string? ServerUrl => Model.ServerUrl;
 
     public Dictionary<string, Bitmap> ImageCache { get; } = [];
+
+    public Dictionary<string, Size> AttachmentSizes { get; } = [];
 
     public IReadOnlyList<AttachmentDto> Attachments => Model.Attachments;
 
@@ -119,6 +137,127 @@ public sealed class MessageViewModel(MessageModel model) : ViewModelBase
             }
 
             return Model.SentAt.ToLocalTime().ToString("g");
+        }
+    }
+
+    public bool TryGetCachedImage(string url, out Bitmap? bitmap)
+    {
+        lock (CacheLock)
+        {
+            if (ImageCache.TryGetValue(url, out bitmap))
+            {
+                TouchLruLocked(this, url);
+                return true;
+            }
+
+            bitmap = null;
+            return false;
+        }
+    }
+
+    public void StoreCachedImage(string url, Bitmap bitmap)
+    {
+        List<Bitmap>? toDispose = null;
+        lock (CacheLock)
+        {
+            if (ImageCache.TryGetValue(url, out Bitmap? existing))
+            {
+                if (!ReferenceEquals(existing, bitmap))
+                {
+                    RemoveLruLocked(this, url);
+                    toDispose ??= [];
+                    toDispose.Add(existing);
+                }
+                else
+                {
+                    TouchLruLocked(this, url);
+                    return;
+                }
+            }
+
+            ImageCache[url] = bitmap;
+            LruImages.AddLast((this, url, bitmap));
+
+            while (LruImages.Count > MaxTotalCachedImages)
+            {
+                (MessageViewModel owner, string evictedUrl, Bitmap evictedBitmap) = LruImages.First!.Value;
+                LruImages.RemoveFirst();
+                owner.ImageCache.Remove(evictedUrl);
+                toDispose ??= [];
+                toDispose.Add(evictedBitmap);
+            }
+        }
+
+        if (toDispose is not null)
+        {
+            foreach (Bitmap bmp in toDispose)
+            {
+                bmp.Dispose();
+            }
+        }
+    }
+
+    public void DisposeImages()
+    {
+        List<Bitmap>? toDispose = null;
+        lock (CacheLock)
+        {
+            if (ImageCache.Count == 0)
+            {
+                return;
+            }
+
+            toDispose = new List<Bitmap>(ImageCache.Values);
+            ImageCache.Clear();
+
+            LinkedListNode<(MessageViewModel Owner, string Url, Bitmap Bitmap)>? node = LruImages.First;
+            while (node is not null)
+            {
+                LinkedListNode<(MessageViewModel Owner, string Url, Bitmap Bitmap)>? next = node.Next;
+                if (ReferenceEquals(node.Value.Owner, this))
+                {
+                    LruImages.Remove(node);
+                }
+                node = next;
+            }
+        }
+
+        foreach (Bitmap bitmap in toDispose)
+        {
+            bitmap.Dispose();
+        }
+    }
+
+    private static void TouchLruLocked(MessageViewModel owner, string url)
+    {
+        LinkedListNode<(MessageViewModel Owner, string Url, Bitmap Bitmap)>? node = LruImages.First;
+        while (node is not null)
+        {
+            if (ReferenceEquals(node.Value.Owner, owner) && node.Value.Url == url)
+            {
+                if (node != LruImages.Last)
+                {
+                    (MessageViewModel Owner, string Url, Bitmap Bitmap) val = node.Value;
+                    LruImages.Remove(node);
+                    LruImages.AddLast(val);
+                }
+                return;
+            }
+            node = node.Next;
+        }
+    }
+
+    private static void RemoveLruLocked(MessageViewModel owner, string url)
+    {
+        LinkedListNode<(MessageViewModel Owner, string Url, Bitmap Bitmap)>? node = LruImages.First;
+        while (node is not null)
+        {
+            if (ReferenceEquals(node.Value.Owner, owner) && node.Value.Url == url)
+            {
+                LruImages.Remove(node);
+                return;
+            }
+            node = node.Next;
         }
     }
 }

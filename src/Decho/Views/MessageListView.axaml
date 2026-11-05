@@ -5,7 +5,12 @@
              x:Class="Decho.Views.MessageListView"
              x:DataType="vm:ChatViewModel">
     <ScrollViewer Name="MessageScrollViewer">
-        <ItemsControl ItemsSource="{Binding Messages}">
+        <ItemsControl Name="MessageItemsControl" ItemsSource="{Binding Messages}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <views:VirtualizingMessagePanel />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:MessageViewModel">
                     <StackPanel>

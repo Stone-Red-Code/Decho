@@ -156,25 +156,7 @@ public sealed class ConnectionService : IConnectionService
     }
 
     internal static MessageModel MessageModelFromDto(MessageDto dto, ServerConnection entry)
-    {
-        UserModel author = new UserModel(
-            dto.SenderUsername,
-            dto.SenderDisplayName ?? dto.SenderUsername,
-            dto.SenderNicknameColor);
-
-        List<AttachmentDto> attachments = dto.Attachments ?? [];
-
-        return new MessageModel(
-            dto.Id.ToString("N"),
-            author,
-            dto.SentAt,
-            dto.Content,
-            dto.ChannelName,
-            entry.Server.ServerUrl,
-            attachments,
-            dto.ReplyTo,
-            dto.Embeds ?? []);
-    }
+        => ChannelService.MessageModelFromDto(dto, entry);
 
     internal ServerConnection? GetConnection(string serverUrl)
     {
@@ -239,7 +221,7 @@ public sealed class ConnectionService : IConnectionService
         //    await ShowVersionMismatchDialogAsync(dialogResult.ServerUrl, result.ServerInfo.Version);
         //}
 
-        AutoJoinRemainingChannels(dialogResult.ServerUrl, result.Channels);
+        AutoJoinRemainingChannels(dialogResult.ServerUrl, result.Channels, result.Histories);
 
         return serverModel;
     }
@@ -263,7 +245,10 @@ public sealed class ConnectionService : IConnectionService
     //    });
     //}
 
-    private async void AutoJoinRemainingChannels(string serverUrl, List<ChannelDto> channels)
+    private async void AutoJoinRemainingChannels(
+        string serverUrl,
+        List<ChannelDto> channels,
+        Dictionary<string, List<MessageDto>> alreadyJoinedHistories)
     {
         ClientConfig config = ConfigManager.Load();
         List<string> leftChannels = config.SavedServers
@@ -279,6 +264,12 @@ public sealed class ConnectionService : IConnectionService
 
             if (leftChannels.Contains(ch.Name, StringComparer.OrdinalIgnoreCase))
             {
+                continue;
+            }
+
+            if (alreadyJoinedHistories.ContainsKey(ch.Name))
+            {
+                RemoveFromLeftChannels(serverUrl, ch.Name);
                 continue;
             }
 

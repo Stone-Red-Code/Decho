@@ -70,7 +70,10 @@ public partial class AvatarView : UserControl
             _avatarService.AvatarChanged += OnAvatarChanged;
         }
 
-        _ = ReloadAsync();
+        if (IsVisible)
+        {
+            _ = ReloadAsync();
+        }
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -84,6 +87,7 @@ public partial class AvatarView : UserControl
         }
 
         _loadVersion++;
+        SetPicture(null);
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -99,7 +103,21 @@ public partial class AvatarView : UserControl
         {
             // Item containers get recycled, so the previous user's picture must not linger.
             SetPicture(null);
-            _ = ReloadAsync();
+            if (IsVisible)
+            {
+                _ = ReloadAsync();
+            }
+        }
+        else if (change.Property == IsVisibleProperty && _isAttached)
+        {
+            if (IsVisible)
+            {
+                _ = ReloadAsync();
+            }
+            else
+            {
+                SetPicture(null);
+            }
         }
     }
 
@@ -109,7 +127,8 @@ public partial class AvatarView : UserControl
         {
             if (string.Equals(serverUrl, ServerUrl, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(username, Username, StringComparison.OrdinalIgnoreCase)
-                && _isAttached)
+                && _isAttached
+                && IsVisible)
             {
                 _ = ReloadAsync();
             }
@@ -127,7 +146,7 @@ public partial class AvatarView : UserControl
         }
 
         Bitmap? bitmap = await _avatarService.GetAvatarAsync(ServerUrl, Username);
-        if (version == _loadVersion)
+        if (version == _loadVersion && _isAttached && IsVisible)
         {
             SetPicture(bitmap);
         }
