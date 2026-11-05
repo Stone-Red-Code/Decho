@@ -4,6 +4,7 @@ using Avalonia.Media.Imaging;
 
 using Decho.Models;
 
+using EchoHub.Core.Constants;
 using EchoHub.Core.DTOs;
 
 namespace Decho.ViewModels;
@@ -56,11 +57,15 @@ public sealed class MessageViewModel(MessageModel model) : ViewModelBase
 
     public string Content => Model.Content;
 
-    public bool IsAction => Model.Content.StartsWith("/me ", StringComparison.Ordinal);
+    public string DisplayContent => FormatContent(Model.Content, AuthorName);
 
-    public string ActionText => IsAction ? Model.Content[4..] : Model.Content;
-
-    public string DisplayContent => IsAction ? $"* {AuthorName} {ActionText}" : Model.Content;
+    /// <summary>Turns stored message content into readable text, including the wire format of action messages.</summary>
+    public static string FormatContent(string content, string authorName)
+    {
+        return MessageConventions.TryParseAction(content, out string? actionText)
+            ? $"* {authorName} {actionText}"
+            : content;
+    }
 
     public ReplyRefDto? ReplyTo => Model.ReplyTo;
 

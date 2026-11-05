@@ -92,7 +92,7 @@ public partial class MessageItemView : UserControl
             if (replyQuote is not null)
             {
                 replyQuote.Text = msg.ReplyTo is { } reply
-                    ? $"\u2514 {reply.SenderUsername}: {reply.Content.Replace('\n', ' ')[..Math.Min(100, reply.Content.Length)]}"
+                    ? FormatReplyQuote(reply)
                     : string.Empty;
             }
         }
@@ -106,6 +106,12 @@ public partial class MessageItemView : UserControl
                 replyQuote.Text = string.Empty;
             }
         }
+    }
+
+    private static string FormatReplyQuote(ReplyRefDto reply)
+    {
+        string content = MessageViewModel.FormatContent(reply.Content, reply.SenderUsername).Replace('\n', ' ');
+        return $"└ {reply.SenderUsername}: {content[..Math.Min(100, content.Length)]}";
     }
 
     private static Size CalculateDisplaySize(double pixelWidth, double pixelHeight)

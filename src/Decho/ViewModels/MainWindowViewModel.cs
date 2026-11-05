@@ -783,7 +783,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             {
                 _ = _notificationService.PlayAsync();
                 string title = $"@{username} – {new Uri(serverUrl).Host}";
-                string body = $"{message.Author.DisplayName} in #{message.ChannelName}: {message.Content}";
+                string body = $"{message.Author.DisplayName} in #{message.ChannelName}: {MessageViewModel.FormatContent(message.Content, message.Author.DisplayName)}";
                 _osNotificationService.Show(title, body);
             }
         };

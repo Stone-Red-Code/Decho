@@ -75,7 +75,7 @@ public sealed class MessageComposerViewModel : ViewModelBase
             this.RaiseAndSetIfChanged(ref field, value);
             this.RaisePropertyChanged(nameof(HasReplyTarget));
             ReplySummary = value is not null
-                ? $"\u21A9 Replying to {value.AuthorName}: {value.Content[..Math.Min(value.Content.Length, 80)]}"
+                ? $"\u21A9 Replying to {value.AuthorName}: {value.DisplayContent[..Math.Min(value.DisplayContent.Length, 80)]}"
                 : string.Empty;
         }
     }
