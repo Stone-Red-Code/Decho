@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Platform.Storage;
 
 using Decho.Models;
 using Decho.Services;
@@ -33,6 +34,7 @@ public sealed class MainWindowViewModel : ViewModelBase
     private Window? _mainWindow;
     private ChannelViewModel? _openChannel;
     private string _openChannelServerUrl = string.Empty;
+    private string? _serverDeletingAccount;
 
     public string Title { get; } = "Decho";
 
@@ -280,6 +282,11 @@ public sealed class MainWindowViewModel : ViewModelBase
                 _ = ShowErrorAsync($"Error from {new Uri(serverUrl).Host}", error);
             }
         });
+    }
+
+    private Task ShowInfoAsync(string title, string message)
+    {
+        return ShowErrorAsync(title, message);
     }
 
     private async Task ShowErrorAsync(string title, string message)
@@ -701,6 +708,8 @@ public sealed class MainWindowViewModel : ViewModelBase
             serverVm.ProfileRequested += () => HandleProfileRequested(serverVm);
             serverVm.JoinChannelRequested += () => HandleJoinChannelRequested(serverVm);
             serverVm.InvitesRequested += () => HandleInvitesRequested(serverVm);
+            serverVm.ExportDataRequested += () => HandleExportDataRequested(serverVm);
+            serverVm.DeleteAccountRequested += () => HandleDeleteAccountRequested(serverVm);
             serverVm.UnmuteUserRequested += () => HandleUnmuteUserRequested(serverVm);
             serverVm.UnbanUserRequested += () => HandleUnbanUserRequested(serverVm);
             _ = serverVm.WhenAnyValue(s => s.SelectedChannel)
@@ -906,6 +915,12 @@ public sealed class MainWindowViewModel : ViewModelBase
 
         ConnectionService.ForceDisconnected += (serverUrl, reason) =>
         {
+            // The server disconnects an account it just deleted, and that flow removes the server itself.
+            if (string.Equals(serverUrl, _serverDeletingAccount, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
             // The server only asks clients to leave, so the connection has to be closed here.
             // Posted because stopping it from inside its own event handler is not safe.
             Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
@@ -1261,6 +1276,67 @@ public sealed class MainWindowViewModel : ViewModelBase
     private async Task HandleInvitesRequested(ServerViewModel server)
     {
         await new InvitesWindow(InviteService, server.ServerUrl).ShowDialog(_mainWindow!);
+    }
+
+    private async Task HandleExportDataRequested(ServerViewModel server)
+    {
+        IStorageFile? file = await _mainWindow!.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Export My Data",
+            SuggestedFileName = $"echohub-export-{server.Name}-{DateTime.Now:yyyyMMdd-HHmmss}.json",
+            DefaultExtension = "json",
+        });
+        if (file?.TryGetLocalPath() is not { } path)
+        {
+            return;
+        }
+
+        try
+        {
+            await File.WriteAllTextAsync(path, await UserService.ExportMyDataAsync(server.ServerUrl));
+            await ShowInfoAsync("Data Exported", $"Saved to {path}.\nContent from encrypted rooms stays encrypted in the export.");
+        }
+        catch (Exception ex)
+        {
+            await ShowErrorAsync("Could Not Export Data", ex.Message);
+        }
+    }
+
+    private async Task HandleDeleteAccountRequested(ServerViewModel server)
+    {
+        IMsBox<ButtonResult> confirmBox = MessageBoxManager.GetMessageBoxStandard(
+            "Delete Account",
+            $"Permanently delete your account on {server.Name}?\n\n"
+            + "This removes your profile, your sessions and every file you uploaded. "
+            + "Your messages stay, shown as from a deleted user.\n\nThis cannot be undone.",
+            ButtonEnum.YesNo);
+        if (await confirmBox.ShowWindowDialogAsync(_mainWindow) != ButtonResult.Yes)
+        {
+            return;
+        }
+
+        string? password = await ShowPromptWindowAsync("Confirm Password", "Enter your password to delete your account:", "Delete");
+        if (string.IsNullOrEmpty(password))
+        {
+            return;
+        }
+
+        _serverDeletingAccount = server.ServerUrl;
+        try
+        {
+            await UserService.DeleteMyAccountAsync(server.ServerUrl, password);
+        }
+        catch (Exception ex)
+        {
+            _serverDeletingAccount = null;
+            await ShowErrorAsync("Could Not Delete Account", ex.Message);
+            return;
+        }
+
+        // The saved login no longer works, so the server entry goes too.
+        await HandleServerRemoveRequested(server);
+        _serverDeletingAccount = null;
+        await ShowInfoAsync("Account Deleted", $"Your account on {server.Name} has been deleted.");
     }
 
     private async Task HandleUnmuteUserRequested(ServerViewModel server)

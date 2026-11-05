@@ -54,6 +54,13 @@
 												<MenuItem Header="My Profile"
 														  Command="{Binding ProfileCommand}"
 														  IsVisible="{Binding IsConnected}" />
+												<MenuItem Header="Export My Data..."
+														  Command="{Binding ExportDataCommand}"
+														  IsVisible="{Binding IsConnected}" />
+												<MenuItem Header="Delete Account..."
+														  Command="{Binding DeleteAccountCommand}"
+														  IsVisible="{Binding IsConnected}" />
+												<Separator IsVisible="{Binding IsConnected}" />
 												<MenuItem Header="Create Channel"
 														  Command="{Binding CreateChannelCommand}"
 														  IsVisible="{Binding IsConnected}" />

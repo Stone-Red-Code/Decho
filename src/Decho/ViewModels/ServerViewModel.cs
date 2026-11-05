@@ -43,6 +43,10 @@ public sealed class ServerViewModel : ViewModelBase
 
     public event Func<Task>? InvitesRequested;
 
+    public event Func<Task>? ExportDataRequested;
+
+    public event Func<Task>? DeleteAccountRequested;
+
     public event Func<Task>? UnmuteUserRequested;
 
     public event Func<Task>? UnbanUserRequested;
@@ -82,6 +86,10 @@ public sealed class ServerViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> JoinChannelCommand { get; }
 
     public ReactiveCommand<Unit, Unit> InvitesCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> ExportDataCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> DeleteAccountCommand { get; }
 
     public ReactiveCommand<Unit, Unit> UnmuteUserCommand { get; }
 
@@ -196,6 +204,8 @@ public sealed class ServerViewModel : ViewModelBase
         ProfileCommand = ReactiveCommand.CreateFromTask(OpenProfileAsync);
         JoinChannelCommand = ReactiveCommand.CreateFromTask(() => JoinChannelRequested?.Invoke() ?? Task.CompletedTask);
         InvitesCommand = ReactiveCommand.CreateFromTask(() => InvitesRequested?.Invoke() ?? Task.CompletedTask);
+        ExportDataCommand = ReactiveCommand.CreateFromTask(() => ExportDataRequested?.Invoke() ?? Task.CompletedTask);
+        DeleteAccountCommand = ReactiveCommand.CreateFromTask(() => DeleteAccountRequested?.Invoke() ?? Task.CompletedTask);
         UnmuteUserCommand = ReactiveCommand.CreateFromTask(() => UnmuteUserRequested?.Invoke() ?? Task.CompletedTask);
         UnbanUserCommand = ReactiveCommand.CreateFromTask(() => UnbanUserRequested?.Invoke() ?? Task.CompletedTask);
     }
