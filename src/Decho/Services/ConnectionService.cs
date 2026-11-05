@@ -225,6 +225,13 @@ public sealed class ConnectionService : IConnectionService
 
         WireConnectionEvents(serverEntry, conn);
 
+        // A second login to a server that is still connected would otherwise leave the first
+        // connection running, with its handlers raising every event twice.
+        if (_connections.ContainsKey(dialogResult.ServerUrl))
+        {
+            _ = await CleanupConnectionAsync(dialogResult.ServerUrl);
+        }
+
         _connections[dialogResult.ServerUrl] = serverEntry;
         SaveRefreshToken(dialogResult.ServerUrl, dialogResult.RememberMe);
         ServerAdded?.Invoke(serverModel);
