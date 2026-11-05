@@ -40,6 +40,7 @@ public partial class MessageItemView : UserControl
     private MenuItem? _replyMenuItem;
     private MenuItem? _mentionMenuItem;
     private MenuItem? _profileMenuItem;
+    private MenuItem? _moderateMenuItem;
     private Separator? _actionsSeparator;
     private MenuItem? _copyTextMenuItem;
     private MenuItem? _copyIdMenuItem;
@@ -351,6 +352,8 @@ public partial class MessageItemView : UserControl
         _profileMenuItem = new MenuItem { Header = "View profile" };
         _profileMenuItem.Click += OnProfileMenuClick;
 
+        _moderateMenuItem = new MenuItem { Header = "Moderate" };
+
         _actionsSeparator = new Separator();
 
         _copyTextMenuItem = new MenuItem { Header = "Copy text" };
@@ -369,6 +372,7 @@ public partial class MessageItemView : UserControl
         menu.Items.Add(_replyMenuItem);
         menu.Items.Add(_mentionMenuItem);
         menu.Items.Add(_profileMenuItem);
+        menu.Items.Add(_moderateMenuItem);
         menu.Items.Add(_actionsSeparator);
         menu.Items.Add(_copyTextMenuItem);
         menu.Items.Add(_copyIdMenuItem);
@@ -394,6 +398,16 @@ public partial class MessageItemView : UserControl
         _replyMenuItem!.IsVisible = canCompose;
         _mentionMenuItem!.IsVisible = canCompose;
         _profileMenuItem!.IsVisible = isRemote && isConnected;
+
+        if (isRemote)
+        {
+            ModerationMenu.Populate(_moderateMenuItem!, mainVm, ResolveServerUrl(), msg.AuthorUsername);
+        }
+        else
+        {
+            _moderateMenuItem!.IsVisible = false;
+        }
+
         _actionsSeparator!.IsVisible = canCompose || _profileMenuItem.IsVisible;
 
         _copyTextMenuItem!.IsVisible = msg.ShowContent;

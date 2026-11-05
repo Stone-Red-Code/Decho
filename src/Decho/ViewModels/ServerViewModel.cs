@@ -1,5 +1,7 @@
 using Decho.Models;
 
+using EchoHub.Core.Models;
+
 using System.Collections.ObjectModel;
 using System.Reactive;
 
@@ -43,6 +45,12 @@ public sealed class ServerViewModel : ViewModelBase
         remove => _profileRequested = (Func<Task>?)Delegate.Remove(_profileRequested, value);
     }
 
+    public event Func<Task>? ClearHistoryRequested;
+
+    public event Func<Task>? UnmuteUserRequested;
+
+    public event Func<Task>? UnbanUserRequested;
+
     private bool _isConnected;
     private bool _isConnecting;
     private string? _connectedUser;
@@ -79,6 +87,28 @@ public sealed class ServerViewModel : ViewModelBase
 
     public ReactiveCommand<Unit, Unit> ProfileCommand { get; }
 
+    public ReactiveCommand<Unit, Unit> ClearHistoryCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> UnmuteUserCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> UnbanUserCommand { get; }
+
+    /// <summary>The user's role on this server, or null until it has been looked up.</summary>
+    public ServerRole? OwnRole
+    {
+        get;
+        set
+        {
+            _ = this.RaiseAndSetIfChanged(ref field, value);
+            this.RaisePropertyChanged(nameof(CanModerate));
+            this.RaisePropertyChanged(nameof(CanAdminister));
+        }
+    }
+
+    public bool CanModerate => IsConnected && OwnRole >= ServerRole.Mod;
+
+    public bool CanAdminister => IsConnected && OwnRole >= ServerRole.Admin;
+
     public ChannelViewModel? SelectedChannel
     {
         get;
@@ -100,6 +130,8 @@ public sealed class ServerViewModel : ViewModelBase
             this.RaisePropertyChanged(nameof(ConnectionStatusText));
             this.RaisePropertyChanged(nameof(ConnectionStatusColor));
             this.RaisePropertyChanged(nameof(ShowConnectionControls));
+            this.RaisePropertyChanged(nameof(CanModerate));
+            this.RaisePropertyChanged(nameof(CanAdminister));
         }
     }
 
@@ -169,6 +201,9 @@ public sealed class ServerViewModel : ViewModelBase
         CreateChannelCommand = ReactiveCommand.CreateFromTask(CreateChannelAsync);
         DeleteChannelCommand = ReactiveCommand.CreateFromTask(DeleteChannelAsync);
         ProfileCommand = ReactiveCommand.CreateFromTask(OpenProfileAsync);
+        ClearHistoryCommand = ReactiveCommand.CreateFromTask(() => ClearHistoryRequested?.Invoke() ?? Task.CompletedTask);
+        UnmuteUserCommand = ReactiveCommand.CreateFromTask(() => UnmuteUserRequested?.Invoke() ?? Task.CompletedTask);
+        UnbanUserCommand = ReactiveCommand.CreateFromTask(() => UnbanUserRequested?.Invoke() ?? Task.CompletedTask);
     }
 
     public void SyncFromModel()

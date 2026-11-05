@@ -60,6 +60,16 @@
 												<MenuItem Header="Delete Channel"
 														  Command="{Binding DeleteChannelCommand}"
 														  IsVisible="{Binding IsConnected}" />
+												<MenuItem Header="Clear Channel History"
+														  Command="{Binding ClearHistoryCommand}"
+														  IsVisible="{Binding CanModerate}" />
+												<Separator IsVisible="{Binding CanModerate}" />
+												<MenuItem Header="Unmute User..."
+														  Command="{Binding UnmuteUserCommand}"
+														  IsVisible="{Binding CanModerate}" />
+												<MenuItem Header="Unban User..."
+														  Command="{Binding UnbanUserCommand}"
+														  IsVisible="{Binding CanAdminister}" />
 											</ContextMenu>
 										</Button.ContextMenu>
 									</Button>

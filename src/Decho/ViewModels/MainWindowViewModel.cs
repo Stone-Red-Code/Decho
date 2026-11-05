@@ -700,6 +700,9 @@ public sealed class MainWindowViewModel : ViewModelBase
             serverVm.CreateChannelRequested += () => HandleCreateChannelRequested(serverVm);
             serverVm.DeleteChannelRequested += () => HandleDeleteChannelRequested(serverVm);
             serverVm.ProfileRequested += () => HandleProfileRequested(serverVm);
+            serverVm.ClearHistoryRequested += () => HandleClearHistoryRequested(serverVm);
+            serverVm.UnmuteUserRequested += () => HandleUnmuteUserRequested(serverVm);
+            serverVm.UnbanUserRequested += () => HandleUnbanUserRequested(serverVm);
             _ = serverVm.WhenAnyValue(s => s.SelectedChannel)
                 .Where(channel => channel is not null)
                 .Subscribe(channel => Sidebar.SelectedChannel = channel!);
@@ -964,6 +967,152 @@ public sealed class MainWindowViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Like <see cref="CanDeleteMessage"/>, this hides what is sure to fail and leaves the rest to
+    /// the server. A user who isn't in the open channel has an unknown role, so they stay eligible.
+    /// </summary>
+    public ModerationOptions GetModerationOptions(string serverUrl, string username)
+    {
+        ServerViewModel? server = Sidebar.GetServer(serverUrl);
+        if (server is not { IsConnected: true, OwnRole: { } ownRole } || IsCurrentUser(serverUrl, username))
+        {
+            return ModerationOptions.None;
+        }
+
+        UserViewModel? target = string.Equals(serverUrl, Chat.CurrentServerUrl, StringComparison.OrdinalIgnoreCase)
+            ? Chat.OnlineUsers.FirstOrDefault(u => string.Equals(u.Username, username, StringComparison.OrdinalIgnoreCase))
+            : null;
+        bool outranksTarget = target is null || target.Role < ownRole;
+        bool isMod = ownRole >= ServerRole.Mod;
+        bool isAdmin = ownRole >= ServerRole.Admin;
+
+        ServerRole[] assignableRoles = isAdmin && target?.Role != ServerRole.Owner
+            ? [.. new[] { ServerRole.Admin, ServerRole.Mod, ServerRole.Member }.Where(role => role < ownRole)]
+            : [];
+
+        return new ModerationOptions(
+            // Kicking only disconnects, so it needs someone who is known to be online.
+            CanKick: isMod && target is not null && outranksTarget,
+            CanMute: isMod && outranksTarget,
+            CanUnmute: isMod,
+            CanBan: isAdmin && outranksTarget,
+            CanUnban: isAdmin && target is null,
+            assignableRoles,
+            target?.Role);
+    }
+
+    public async Task KickUserAsync(string serverUrl, string username)
+    {
+        ModerationWindow dialog = ModerationWindow.ForReason($"Kick {username}", $"{username} will be disconnected but can reconnect right away.", "Kick");
+        if (await dialog.ShowDialog<bool?>(_mainWindow!) == true)
+        {
+            await RunModerationAsync("Could Not Kick User", () => UserService.KickUserAsync(serverUrl, username, dialog.ResultReason));
+        }
+    }
+
+    public async Task BanUserAsync(string serverUrl, string username)
+    {
+        ModerationWindow dialog = ModerationWindow.ForReason($"Ban {username}", $"{username} will be disconnected and can't log in until unbanned.", "Ban");
+        if (await dialog.ShowDialog<bool?>(_mainWindow!) == true)
+        {
+            await RunModerationAsync("Could Not Ban User", () => UserService.BanUserAsync(serverUrl, username, dialog.ResultReason));
+        }
+    }
+
+    public async Task MuteUserAsync(string serverUrl, string username)
+    {
+        ModerationWindow dialog = ModerationWindow.ForMute(username);
+        if (await dialog.ShowDialog<bool?>(_mainWindow!) == true)
+        {
+            await RunModerationAsync(
+                "Could Not Mute User",
+                () => UserService.MuteUserAsync(serverUrl, username, dialog.ResultDurationMinutes),
+                $"{username} was muted.");
+        }
+    }
+
+    public Task UnmuteUserAsync(string serverUrl, string username)
+    {
+        return RunModerationAsync("Could Not Unmute User", () => UserService.UnmuteUserAsync(serverUrl, username), $"{username} was unmuted.");
+    }
+
+    public Task UnbanUserAsync(string serverUrl, string username)
+    {
+        return RunModerationAsync("Could Not Unban User", () => UserService.UnbanUserAsync(serverUrl, username), $"{username} was unbanned.");
+    }
+
+    public async Task AssignRoleAsync(string serverUrl, string username, ServerRole role)
+    {
+        IMsBox<ButtonResult> confirmBox = MessageBoxManager.GetMessageBoxStandard("Set Role", $"Make {username} {role}?", ButtonEnum.YesNo);
+        if (await confirmBox.ShowWindowDialogAsync(_mainWindow) != ButtonResult.Yes)
+        {
+            return;
+        }
+
+        await RunModerationAsync("Could Not Set Role", () => UserService.AssignRoleAsync(serverUrl, username, role), $"{username} is now {role}.");
+
+        // Role changes aren't broadcast, so the users panel has to ask for them.
+        if (string.Equals(serverUrl, Chat.CurrentServerUrl, StringComparison.OrdinalIgnoreCase))
+        {
+            await RefreshOnlineUsersAsync(serverUrl, Chat.CurrentChannelName);
+        }
+    }
+
+    private async Task RunModerationAsync(string failureTitle, Func<Task> action, string? successMessage = null)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            await ShowErrorAsync(failureTitle, ex.Message);
+            return;
+        }
+
+        if (successMessage is not null)
+        {
+            ShowSystemMessage(successMessage);
+        }
+    }
+
+    private async Task HandleClearHistoryRequested(ServerViewModel server)
+    {
+        string channelName = Chat.CurrentChannelName;
+        if (string.IsNullOrEmpty(channelName) || !string.Equals(Chat.CurrentServerUrl, server.ServerUrl, StringComparison.OrdinalIgnoreCase))
+        {
+            await ShowErrorAsync("Clear Channel History", "Open a channel on this server first.");
+            return;
+        }
+
+        IMsBox<ButtonResult> confirmBox = MessageBoxManager.GetMessageBoxStandard(
+            "Clear Channel History",
+            $"Delete all messages and attachments in #{channelName} for everyone?\nThis cannot be undone.",
+            ButtonEnum.YesNo);
+        if (await confirmBox.ShowWindowDialogAsync(_mainWindow) == ButtonResult.Yes)
+        {
+            await RunModerationAsync("Could Not Clear History", () => ChannelService.NukeChannelAsync(server.ServerUrl, channelName));
+        }
+    }
+
+    private async Task HandleUnmuteUserRequested(ServerViewModel server)
+    {
+        ModerationWindow dialog = ModerationWindow.ForUsername("Unmute User", "Enter the username to unmute.", "Unmute");
+        if (await dialog.ShowDialog<bool?>(_mainWindow!) == true)
+        {
+            await UnmuteUserAsync(server.ServerUrl, dialog.ResultUsername!);
+        }
+    }
+
+    private async Task HandleUnbanUserRequested(ServerViewModel server)
+    {
+        ModerationWindow dialog = ModerationWindow.ForUsername("Unban User", "Enter the username to unban.", "Unban");
+        if (await dialog.ShowDialog<bool?>(_mainWindow!) == true)
+        {
+            await UnbanUserAsync(server.ServerUrl, dialog.ResultUsername!);
+        }
+    }
+
     private void RemoveMessage(string serverUrl, string channelName, string messageId)
     {
         if (Chat.Composer.ReplyTarget?.Model.Id == messageId)
@@ -1007,10 +1156,34 @@ public sealed class MainWindowViewModel : ViewModelBase
             {
                 Chat.SetOnlineUsers(users);
             });
+
+            await UpdateOwnRoleAsync(serverUrl, users);
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"RefreshOnlineUsers failed: {ex.Message}");
+        }
+    }
+
+    private async Task UpdateOwnRoleAsync(string serverUrl, List<UserPresenceDto> users)
+    {
+        ServerViewModel? server = Sidebar.GetServer(serverUrl);
+        if (server is null)
+        {
+            return;
+        }
+
+        ServerRole? role = users.FirstOrDefault(u => IsCurrentUser(serverUrl, u.Username))?.Role;
+
+        // Invisible users aren't listed, so their role has to come from their profile.
+        if (role is null && server.OwnRole is null && UserService.GetCurrentUsername(serverUrl) is { } username)
+        {
+            role = (await UserService.GetUserProfileAsync(serverUrl, username))?.Role;
+        }
+
+        if (role is not null)
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => server.OwnRole = role);
         }
     }
 
