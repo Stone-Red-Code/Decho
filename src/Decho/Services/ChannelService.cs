@@ -136,7 +136,7 @@ internal sealed class ChannelService : IChannelService
     public async Task NukeChannelAsync(string serverUrl, string channelName)
     {
         ServerConnection? entry = _store.Get(serverUrl);
-        if (entry is null) return;
+        if (entry is null) throw new InvalidOperationException("Not connected to server");
 
         await entry.ApiClient.NukeChannelAsync(channelName);
     }

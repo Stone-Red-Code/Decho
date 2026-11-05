@@ -22,7 +22,7 @@ internal sealed class UserService : IUserService
     public async Task UpdateStatusAsync(string serverUrl, UserStatus status, string? statusMessage)
     {
         ServerConnection? entry = _store.Get(serverUrl);
-        if (entry is null) return;
+        if (entry is null) throw new InvalidOperationException("Not connected to server");
 
         await entry.Manager.UpdateStatusAsync(status, statusMessage);
         entry.User.Status = status;
@@ -32,7 +32,7 @@ internal sealed class UserService : IUserService
     public async Task UpdateProfileAsync(string serverUrl, string? displayName, string? bio, string? nickColor)
     {
         ServerConnection? entry = _store.Get(serverUrl);
-        if (entry is null) return;
+        if (entry is null) throw new InvalidOperationException("Not connected to server");
 
         UserProfileDto? updated = await entry.ApiClient.UpdateProfileAsync(new UpdateProfileRequest(displayName, bio, nickColor));
         if (updated is not null)
@@ -45,7 +45,7 @@ internal sealed class UserService : IUserService
     public async Task SetAvatarAsync(string serverUrl, byte[] preparedImage)
     {
         ServerConnection? entry = _store.Get(serverUrl);
-        if (entry is null) return;
+        if (entry is null) throw new InvalidOperationException("Not connected to server");
 
         using MemoryStream stream = new MemoryStream(preparedImage);
         string? avatarAscii = await entry.ApiClient.UploadAvatarAsync(stream, "avatar.png");
@@ -77,7 +77,7 @@ internal sealed class UserService : IUserService
     public async Task KickUserAsync(string serverUrl, string username, string? reason)
     {
         ServerConnection? entry = _store.Get(serverUrl);
-        if (entry is null) return;
+        if (entry is null) throw new InvalidOperationException("Not connected to server");
 
         await entry.ApiClient.KickUserAsync(username, reason);
     }
@@ -85,7 +85,7 @@ internal sealed class UserService : IUserService
     public async Task BanUserAsync(string serverUrl, string username, string? reason)
     {
         ServerConnection? entry = _store.Get(serverUrl);
-        if (entry is null) return;
+        if (entry is null) throw new InvalidOperationException("Not connected to server");
 
         await entry.ApiClient.BanUserAsync(username, reason);
     }
@@ -93,7 +93,7 @@ internal sealed class UserService : IUserService
     public async Task UnbanUserAsync(string serverUrl, string username)
     {
         ServerConnection? entry = _store.Get(serverUrl);
-        if (entry is null) return;
+        if (entry is null) throw new InvalidOperationException("Not connected to server");
 
         await entry.ApiClient.UnbanUserAsync(username);
     }
@@ -101,7 +101,7 @@ internal sealed class UserService : IUserService
     public async Task MuteUserAsync(string serverUrl, string username, int? durationMinutes)
     {
         ServerConnection? entry = _store.Get(serverUrl);
-        if (entry is null) return;
+        if (entry is null) throw new InvalidOperationException("Not connected to server");
 
         await entry.ApiClient.MuteUserAsync(username, durationMinutes);
     }
@@ -109,7 +109,7 @@ internal sealed class UserService : IUserService
     public async Task UnmuteUserAsync(string serverUrl, string username)
     {
         ServerConnection? entry = _store.Get(serverUrl);
-        if (entry is null) return;
+        if (entry is null) throw new InvalidOperationException("Not connected to server");
 
         await entry.ApiClient.UnmuteUserAsync(username);
     }
@@ -117,7 +117,7 @@ internal sealed class UserService : IUserService
     public async Task AssignRoleAsync(string serverUrl, string username, ServerRole role)
     {
         ServerConnection? entry = _store.Get(serverUrl);
-        if (entry is null) return;
+        if (entry is null) throw new InvalidOperationException("Not connected to server");
 
         await entry.ApiClient.AssignRoleAsync(username, role);
     }
