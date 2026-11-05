@@ -63,6 +63,8 @@ public sealed class ConnectionService : IConnectionService
 
     public event Action<string, UserPresenceDto>? UserStatusChanged;
 
+    public event Action<string, string, string?>? ChannelTopicChanged;
+
     private readonly Dictionary<string, ServerConnection> _connections = new(StringComparer.OrdinalIgnoreCase);
     private readonly IConfigPersistenceService _config;
     private readonly IAttachmentService _attachment;
@@ -389,7 +391,7 @@ public sealed class ConnectionService : IConnectionService
                 string.Equals(c.Name, channel.Name, StringComparison.OrdinalIgnoreCase));
             if (existing is not null)
             {
-                _ = existing.Topic = channel.Topic;
+                ChannelTopicChanged?.Invoke(entry.Server.ServerUrl, existing.Name, channel.Topic);
             }
             else
             {

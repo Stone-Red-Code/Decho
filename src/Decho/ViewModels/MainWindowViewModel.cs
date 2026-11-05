@@ -816,6 +816,24 @@ public sealed class MainWindowViewModel : ViewModelBase
             }
         };
 
+        ConnectionService.ChannelTopicChanged += (serverUrl, channelName, topic) =>
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                ChannelViewModel? channel = FindChannelViewModel(serverUrl, channelName);
+                if (channel is null)
+                {
+                    return;
+                }
+
+                channel.Topic = topic;
+                if (ReferenceEquals(channel, _openChannel))
+                {
+                    Chat.UpdateTopic(channel);
+                }
+            });
+        };
+
         ConnectionService.ChannelDeleted += (serverUrl, channelName) =>
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>

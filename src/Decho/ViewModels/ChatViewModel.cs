@@ -126,6 +126,12 @@ public sealed class ChatViewModel : ViewModelBase
         }
     }
 
+    public void UpdateTopic(ChannelViewModel channel)
+    {
+        ChannelTopic = channel.Topic;
+        HasTopic = channel.HasTopic;
+    }
+
     public void SetOnlineUsers(List<UserPresenceDto> users)
     {
         OnlineUsers.Clear();
