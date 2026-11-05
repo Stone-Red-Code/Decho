@@ -6,7 +6,6 @@ using Decho.Services;
 using Decho.ViewModels;
 using Decho.Views;
 
-using EchoHub.Client.Commands;
 using EchoHub.Client.Config;
 using EchoHub.Client.Services;
 
@@ -69,9 +68,6 @@ public partial class App : Application
         IInviteService inviteService = new InviteService(store);
         Locator.CurrentMutable.RegisterLazySingleton<IInviteService>(() => inviteService);
 
-        CommandHandler commandHandler = new CommandHandler();
-        Locator.CurrentMutable.RegisterLazySingleton<CommandHandler>(() => commandHandler);
-
         NotificationSoundService notificationService = new(ConfigManager.Load().Notifications);
         Locator.CurrentMutable.RegisterLazySingleton<NotificationSoundService>(() => notificationService);
 
@@ -85,7 +81,6 @@ public partial class App : Application
                 Locator.Current.GetService<IChannelService>()!,
                 Locator.Current.GetService<IUserService>()!,
                 Locator.Current.GetService<IInviteService>()!,
-                Locator.Current.GetService<CommandHandler>()!,
                 Locator.Current.GetService<NotificationSoundService>()!,
                 Locator.Current.GetService<OsNotificationService>()!,
                 Locator.Current.GetService<IReadPositionStore>()!));

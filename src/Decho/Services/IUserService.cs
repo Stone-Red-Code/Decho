@@ -9,9 +9,6 @@ public interface IUserService
 
     Task UpdateProfileAsync(string serverUrl, string? displayName, string? bio, string? nickColor);
 
-    /// <summary>Uploads a picture from a local file path or HTTP(S) URL.</summary>
-    Task SetAvatarAsync(string serverUrl, string target);
-
     /// <summary>Uploads an image already prepared by <see cref="AvatarImageProcessor"/>.</summary>
     Task SetAvatarAsync(string serverUrl, byte[] preparedImage);
 

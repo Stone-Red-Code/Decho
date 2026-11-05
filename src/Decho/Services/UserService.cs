@@ -10,8 +10,6 @@ namespace Decho.Services;
 
 internal sealed class UserService : IUserService
 {
-    private static readonly HttpClient AvatarDownloadClient = new HttpClient();
-
     private readonly IConnectionStore _store;
     private readonly IAvatarService _avatarService;
 
@@ -42,17 +40,6 @@ internal sealed class UserService : IUserService
             entry.User.DisplayName = updated.DisplayName ?? updated.Username;
             entry.User.NicknameColor = updated.NicknameColor;
         }
-    }
-
-    public async Task SetAvatarAsync(string serverUrl, string target)
-    {
-        byte[] source = Uri.TryCreate(target, UriKind.Absolute, out Uri? uri) && uri.Scheme is "http" or "https"
-            ? await AvatarDownloadClient.GetByteArrayAsync(uri)
-            : await File.ReadAllBytesAsync(target);
-
-        using MemoryStream stream = new MemoryStream(source);
-        byte[] prepared = await Task.Run(() => AvatarImageProcessor.PrepareForUpload(stream));
-        await SetAvatarAsync(serverUrl, prepared);
     }
 
     public async Task SetAvatarAsync(string serverUrl, byte[] preparedImage)

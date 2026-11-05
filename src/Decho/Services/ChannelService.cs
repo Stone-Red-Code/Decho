@@ -149,19 +149,6 @@ internal sealed class ChannelService : IChannelService
         await entry.ApiClient.DeleteMessageAsync(Guid.Parse(messageId));
     }
 
-    public void UpdateChannelTopic(string serverUrl, string channelName, string? topic)
-    {
-        ServerConnection? entry = _store.Get(serverUrl);
-        if (entry is null) return;
-
-        ChannelModel? channel = entry.Server.Channels.FirstOrDefault(c =>
-            string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
-        if (channel is not null)
-        {
-            channel.Topic = topic;
-        }
-    }
-
     public async Task SetChannelTopicAsync(string serverUrl, string channelName, string? topic)
     {
         ServerConnection? entry = _store.Get(serverUrl);
@@ -285,25 +272,6 @@ internal sealed class ChannelService : IChannelService
         }
 
         _ = await entry.ApiClient.SendMessageWithAttachmentsAsync(channelName, content, attachments, size);
-    }
-
-    public async Task UploadFileAsync(string serverUrl, string channelName, string filePath, string? size)
-    {
-        ServerConnection? entry = _store.Get(serverUrl);
-        if (entry is null) return;
-
-        entry.Manager.RoomKeys.TryGetKey(channelName, out byte[]? roomKey);
-        OutgoingAttachment attachment = await BuildAttachmentAsync(filePath, roomKey, size);
-
-        _ = await entry.ApiClient.SendMessageWithAttachmentsAsync(channelName, "", [attachment], size);
-    }
-
-    public async Task SendUrlAsync(string serverUrl, string channelName, string url, string? size)
-    {
-        ServerConnection? entry = _store.Get(serverUrl);
-        if (entry is null) return;
-
-        _ = await entry.ApiClient.SendUrlAsync(channelName, url, size);
     }
 
     public async Task<List<MessageModel>> GetHistoryAsync(string serverUrl, string channelName, int count = HubConstants.DefaultHistoryCount, int offset = 0)

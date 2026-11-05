@@ -1,7 +1,6 @@
 using Decho.Models;
 using Decho.Services;
 
-using EchoHub.Client.Commands;
 using EchoHub.Core.Constants;
 
 using System.Collections.ObjectModel;
@@ -13,13 +12,10 @@ public sealed class MessageComposerViewModel : ViewModelBase
 {
     public event Action<string, string, IReadOnlyList<string>, Guid?>? SendRequested;
 
-    public event Func<string, Task<string?>>? CommandRequested;
-
     public event Action? FocusRequested;
 
     private readonly ObservableCollection<UserViewModel> _onlineUsers = [];
     private readonly ObservableCollection<string> _channelNames = [];
-    private CommandHandler? _commandHandler;
 
     public ObservableCollection<StagedFile> StagedFiles { get; } = [];
 
@@ -62,8 +58,6 @@ public sealed class MessageComposerViewModel : ViewModelBase
     public bool IsEditable => !IsReadOnly && IsConnected;
 
     public ReactiveCommand<Unit, Unit> SendCommand { get; }
-
-    public bool HasCommandHandler => _commandHandler is not null;
 
     public AutocompleteController Autocomplete { get; }
 
@@ -183,17 +177,6 @@ public sealed class MessageComposerViewModel : ViewModelBase
         IsConnected = isConnected;
     }
 
-    public void SetCommandHandler(CommandHandler handler)
-    {
-        _commandHandler = handler;
-        this.RaisePropertyChanged(nameof(HasCommandHandler));
-    }
-
-    public bool IsCommand(string input)
-    {
-        return _commandHandler?.IsCommand(input) ?? input.StartsWith('/');
-    }
-
     public int InsertAutocomplete(string item)
     {
         string? insertion = Autocomplete.GetInsertion(item);
@@ -240,12 +223,6 @@ public sealed class MessageComposerViewModel : ViewModelBase
     {
         string text = Draft.Trim();
         Draft = string.Empty;
-
-        if (_commandHandler is not null && _commandHandler.IsCommand(text))
-        {
-            _ = (CommandRequested?.Invoke(text));
-            return;
-        }
 
         List<string> filePaths = StagedFiles.Select(f => f.FilePath).ToList();
         StagedFiles.Clear();

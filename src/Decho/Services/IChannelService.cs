@@ -22,9 +22,6 @@ public interface IChannelService
 
     Task DeleteMessageAsync(string serverUrl, string messageId);
 
-    void UpdateChannelTopic(string serverUrl, string channelName, string? topic);
-
-    /// <summary>Changes the topic on the server, unlike <see cref="UpdateChannelTopic"/> which only changes the local copy.</summary>
     Task SetChannelTopicAsync(string serverUrl, string channelName, string? topic);
 
     Task<ChannelCryptoDto?> GetChannelCryptoAsync(string serverUrl, string channelName);
@@ -47,10 +44,6 @@ public interface IChannelService
     Task SendMessageAsync(string serverUrl, string channelName, string content, Guid? replyToMessageId = null);
 
     Task SendMessageWithAttachmentsAsync(string serverUrl, string channelName, string content, IReadOnlyList<string> filePaths, string? size = null);
-
-    Task UploadFileAsync(string serverUrl, string channelName, string filePath, string? size);
-
-    Task SendUrlAsync(string serverUrl, string channelName, string url, string? size);
 
     Task<List<MessageModel>> GetHistoryAsync(string serverUrl, string channelName, int count = 50, int offset = 0);
 }

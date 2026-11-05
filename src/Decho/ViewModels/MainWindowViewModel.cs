@@ -5,14 +5,12 @@ using Decho.Models;
 using Decho.Services;
 using Decho.Views;
 
-using EchoHub.Client.Commands;
 using EchoHub.Client.Config;
 using EchoHub.Client.Services;
 using EchoHub.Client.UI.Dialogs;
 using EchoHub.Core.Constants;
 using EchoHub.Core.DTOs;
 using EchoHub.Core.Models;
-using EchoHub.Core.Services;
 
 using MsBox.Avalonia;
 using MsBox.Avalonia.Base;
@@ -27,7 +25,6 @@ namespace Decho.ViewModels;
 
 public sealed class MainWindowViewModel : ViewModelBase
 {
-    private readonly CommandHandler _commandHandler;
     private readonly NotificationSoundService _notificationService;
     private readonly OsNotificationService _osNotificationService;
     private readonly IReadPositionStore _readPositions;
@@ -52,13 +49,12 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     public ReactiveCommand<Unit, Unit> AddServerCommand { get; }
 
-    public MainWindowViewModel(IConnectionService connectionService, IChannelService channelService, IUserService userService, IInviteService inviteService, CommandHandler commandHandler, NotificationSoundService notificationService, OsNotificationService osNotificationService, IReadPositionStore readPositions)
+    public MainWindowViewModel(IConnectionService connectionService, IChannelService channelService, IUserService userService, IInviteService inviteService, NotificationSoundService notificationService, OsNotificationService osNotificationService, IReadPositionStore readPositions)
     {
         ConnectionService = connectionService;
         ChannelService = channelService;
         UserService = userService;
         InviteService = inviteService;
-        _commandHandler = commandHandler;
         _notificationService = notificationService;
         _osNotificationService = osNotificationService;
         _readPositions = readPositions;
@@ -69,10 +65,8 @@ public sealed class MainWindowViewModel : ViewModelBase
         AddServerCommand = ReactiveCommand.Create(AddServer);
 
         Chat.Composer.SendRequested += HandleSendRequested;
-        Chat.Composer.CommandRequested += HandleCommandAsync;
         Chat.LoadMoreRequested += HandleLoadMoreRequested;
 
-        WireCommandHandlerEvents();
         WireConnectionServiceEvents();
 
         _ = Sidebar.WhenAnyValue(x => x.SelectedChannel)
@@ -293,407 +287,6 @@ public sealed class MainWindowViewModel : ViewModelBase
     {
         IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard(title, message, ButtonEnum.Ok);
         _ = await box.ShowWindowDialogAsync(_mainWindow);
-    }
-
-    private void WireCommandHandlerEvents()
-    {
-        _commandHandler.OnSetStatus += async (status, message) =>
-        {
-            string serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl))
-            {
-                return;
-            }
-
-            await UserService.UpdateStatusAsync(serverUrl, status ?? UserStatus.Online, message);
-        };
-
-        _commandHandler.OnJoinChannel += async (channelName, password) =>
-        {
-            string serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl))
-            {
-                return;
-            }
-
-            string? promptMessage = null;
-            while (true)
-            {
-                try
-                {
-                    ChannelCryptoDto? crypto = await ChannelService.GetChannelCryptoAsync(serverUrl, channelName);
-                    bool isEncrypted = crypto is not null && crypto.IsEncrypted;
-
-                    if (isEncrypted && !ChannelService.HasChannelKey(serverUrl, channelName) && password is null)
-                    {
-                        password = await ShowPromptWindowAsync("Unlock Channel", promptMessage ?? "Enter the passphrase to unlock messages:", "Unlock");
-                        if (string.IsNullOrEmpty(password))
-                        {
-                            return;
-                        }
-                    }
-
-                    ChannelJoinResult result = await ChannelService.JoinWithCryptoAsync(serverUrl, channelName, password);
-                    EnsureChannelInList(serverUrl, channelName);
-
-                    ChannelModel? channelModel = FindChannel(serverUrl, channelName);
-                    if (channelModel is not null)
-                    {
-                        ChannelViewModel? channelVm = Sidebar.GetServer(serverUrl)?.Channels
-                            .FirstOrDefault(c => c.Name == channelName);
-                        if (channelVm is not null)
-                        {
-                            foreach (MessageModel msg in result.History)
-                            {
-                                channelVm.AddMessage(msg);
-                            }
-                        }
-                    }
-
-                    return;
-                }
-                catch (InvalidOperationException ex) when (ex.Message == "Wrong passphrase")
-                {
-                    password = null;
-                    promptMessage = "Wrong passphrase - try again.";
-                }
-            }
-        };
-
-        _commandHandler.OnLeaveChannel += async () =>
-        {
-            string serverUrl = GetCurrentServerUrl();
-            string channel = Chat.CurrentChannelName;
-            if (string.IsNullOrEmpty(serverUrl) || string.IsNullOrEmpty(channel))
-            {
-                return;
-            }
-
-            if (channel == HubConstants.DefaultChannel)
-            {
-                return;
-            }
-
-            await ChannelService.LeaveChannelAsync(serverUrl, channel);
-        };
-
-        _commandHandler.OnListUsers += async () =>
-        {
-            string serverUrl = GetCurrentServerUrl();
-            string channel = Chat.CurrentChannelName;
-            if (string.IsNullOrEmpty(serverUrl) || string.IsNullOrEmpty(channel))
-            {
-                return;
-            }
-
-            List<UserPresenceDto> users = await UserService.GetOnlineUsersAsync(serverUrl, channel);
-            string userList = string.Join(", ", users.Select(u => u.DisplayName ?? u.Username));
-            ShowSystemMessage($"Online in #{channel}: {userList}");
-        };
-
-        _commandHandler.OnSetTopic += async topic =>
-        {
-            string serverUrl = GetCurrentServerUrl();
-            string channel = Chat.CurrentChannelName;
-            if (string.IsNullOrEmpty(serverUrl) || string.IsNullOrEmpty(channel))
-            {
-                return;
-            }
-
-            await UserService.UpdateProfileAsync(serverUrl, null, null, null);
-            ChannelService.UpdateChannelTopic(serverUrl, channel, topic);
-            Chat.ChannelTopic = topic;
-        };
-
-        _commandHandler.OnKickUser += async (username, reason) =>
-        {
-            string serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl))
-            {
-                return;
-            }
-
-            await UserService.KickUserAsync(serverUrl, username, reason);
-        };
-
-        _commandHandler.OnBanUser += async (username, reason) =>
-        {
-            string serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl))
-            {
-                return;
-            }
-
-            await UserService.BanUserAsync(serverUrl, username, reason);
-        };
-
-        _commandHandler.OnUnbanUser += async username =>
-        {
-            string serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl))
-            {
-                return;
-            }
-
-            await UserService.UnbanUserAsync(serverUrl, username);
-        };
-
-        _commandHandler.OnMuteUser += async (username, duration) =>
-        {
-            string serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl))
-            {
-                return;
-            }
-
-            await UserService.MuteUserAsync(serverUrl, username, duration);
-        };
-
-        _commandHandler.OnUnmuteUser += async username =>
-        {
-            string serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl))
-            {
-                return;
-            }
-
-            await UserService.UnmuteUserAsync(serverUrl, username);
-        };
-
-        _commandHandler.OnAssignRole += async (username, roleStr) =>
-        {
-            string serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl))
-            {
-                return;
-            }
-
-            ServerRole role = roleStr.ToLowerInvariant() switch
-            {
-                "admin" => ServerRole.Admin,
-                "mod" => ServerRole.Mod,
-                _ => ServerRole.Member,
-            };
-            await UserService.AssignRoleAsync(serverUrl, username, role);
-        };
-
-        _commandHandler.OnNukeChannel += async () =>
-        {
-            string serverUrl = GetCurrentServerUrl();
-            string channel = Chat.CurrentChannelName;
-            if (string.IsNullOrEmpty(serverUrl) || string.IsNullOrEmpty(channel))
-            {
-                return;
-            }
-
-            await ChannelService.NukeChannelAsync(serverUrl, channel);
-        };
-
-        _commandHandler.OnTestSound += _notificationService.PlayTestAsync;
-
-        _commandHandler.OnQuit += () =>
-        {
-            if (_mainWindow is not null)
-            {
-                Avalonia.Threading.Dispatcher.UIThread.Post(() => _mainWindow.Close());
-            }
-
-            return Task.CompletedTask;
-        };
-
-        _commandHandler.OnSendAction += async text =>
-        {
-            await HandleSendTextAsync(MessageConventions.FormatAction(text));
-        };
-
-        _commandHandler.OnSendBanner += async text =>
-        {
-            string? banner = AsciiBannerService.Render(text);
-            if (banner is null) return;
-            await HandleSendTextAsync(banner);
-        };
-
-        _commandHandler.OnCreateInvite += async (maxUses, expiresInHours) =>
-        {
-            string serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl)) return;
-
-            try
-            {
-                InviteDto? invite = await InviteService.CreateInviteAsync(serverUrl, maxUses, expiresInHours);
-                if (invite is not null)
-                    ShowSystemMessage($"Invite code: {invite.Code}");
-            }
-            catch (Exception ex)
-            {
-                ShowSystemMessage($"Failed to create invite: {ex.Message}");
-            }
-        };
-
-        _commandHandler.OnListInvites += async () =>
-        {
-            string serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl)) return;
-
-            try
-            {
-                List<InviteDto> invites = await InviteService.GetInvitesAsync(serverUrl);
-                if (invites.Count == 0)
-                    ShowSystemMessage("No invite codes.");
-                else
-                    ShowSystemMessage(string.Join(" | ", invites.Select(i => $"{i.Code} ({i.UseCount}/{i.MaxUses})")));
-            }
-            catch (Exception ex)
-            {
-                ShowSystemMessage($"Failed to list invites: {ex.Message}");
-            }
-        };
-
-        _commandHandler.OnRevokeInvite += async code =>
-        {
-            string serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl)) return;
-
-            try
-            {
-                await InviteService.RevokeInviteAsync(serverUrl, code);
-                ShowSystemMessage($"Invite {code} revoked.");
-            }
-            catch (Exception ex)
-            {
-                ShowSystemMessage($"Failed to revoke invite: {ex.Message}");
-            }
-        };
-
-        _commandHandler.OnExportData += async () =>
-        {
-            string serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl)) return;
-
-            try
-            {
-                string data = await UserService.ExportMyDataAsync(serverUrl);
-                string fileName = $"echohub-export-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.json";
-                string downloadsPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                string filePath = Path.Combine(downloadsPath, "Downloads", fileName);
-                await File.WriteAllTextAsync(filePath, data);
-                ShowSystemMessage($"Data exported to {filePath}");
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Export failed: {ex.Message}");
-            }
-        };
-
-        _commandHandler.OnDeleteAccount += async () =>
-        {
-            string serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl)) return;
-
-            IMsBox<ButtonResult> confirmBox = MessageBoxManager.GetMessageBoxStandard(
-                "Delete Account", "Are you sure you want to permanently delete your account? This cannot be undone.", ButtonEnum.YesNo);
-            ButtonResult confirm = await confirmBox.ShowWindowDialogAsync(_mainWindow);
-            if (confirm != ButtonResult.Yes) return;
-
-            string? pwd = await ShowPromptWindowAsync("Confirm Password", "Enter your password to confirm account deletion:", "Delete");
-            if (string.IsNullOrEmpty(pwd)) return;
-
-            try
-            {
-                await UserService.DeleteMyAccountAsync(serverUrl, pwd);
-                ShowSystemMessage("Account deleted.");
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Delete failed: {ex.Message}");
-            }
-        };
-
-        _commandHandler.OnSendFile += async (target, size) =>
-        {
-            string serverUrl = GetCurrentServerUrl();
-            string channel = Chat.CurrentChannelName;
-            if (string.IsNullOrEmpty(serverUrl) || string.IsNullOrEmpty(channel))
-            {
-                return;
-            }
-
-            try
-            {
-                if (Uri.TryCreate(target, UriKind.Absolute, out Uri? uri)
-                    && (uri.Scheme == "http" || uri.Scheme == "https"))
-                {
-                    await ChannelService.SendUrlAsync(serverUrl, channel, target, size);
-                }
-                else
-                {
-                    await ChannelService.UploadFileAsync(serverUrl, channel, target, size);
-                }
-            }
-            catch (Exception ex)
-            {
-                ShowSystemMessage($"Send failed: {ex.Message}");
-            }
-        };
-
-        _commandHandler.OnSetNick += async displayName =>
-        {
-            string serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl))
-            {
-                return;
-            }
-
-            await UserService.UpdateProfileAsync(serverUrl, displayName, null, null);
-        };
-
-        _commandHandler.OnSetColor += async color =>
-        {
-            string serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl))
-            {
-                return;
-            }
-
-            await UserService.UpdateProfileAsync(serverUrl, null, null, color);
-        };
-
-        _commandHandler.OnSetAvatar += async target =>
-        {
-            string serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl))
-            {
-                return;
-            }
-
-            await UserService.SetAvatarAsync(serverUrl, target);
-        };
-
-        _commandHandler.OnOpenProfile += async username =>
-        {
-            string serverUrl = GetCurrentServerUrl();
-            if (string.IsNullOrEmpty(serverUrl))
-            {
-                return;
-            }
-
-            string target = username ?? UserService.GetCurrentUsername(serverUrl) ?? string.Empty;
-            if (string.IsNullOrEmpty(target))
-            {
-                return;
-            }
-
-            await ShowProfileAsync(serverUrl, target);
-        };
-
-        _commandHandler.OnOpenServers += () =>
-        {
-            ClientConfig config = ConfigManager.Load();
-            string servers = string.Join("\n", config.SavedServers.Select(s =>
-                $"{s.Name} ({s.Url}) - {s.Username ?? "?"}"));
-            ShowSystemMessage(servers);
-            return Task.CompletedTask;
-        };
     }
 
     private void WireConnectionServiceEvents()
@@ -1383,25 +976,6 @@ public sealed class MainWindowViewModel : ViewModelBase
         return string.Equals(username, UserService.GetCurrentUsername(serverUrl), StringComparison.OrdinalIgnoreCase);
     }
 
-    private async Task HandleSendTextAsync(string text)
-    {
-        string serverUrl = GetCurrentServerUrl();
-        string channelName = Chat.CurrentChannelName;
-        if (string.IsNullOrEmpty(serverUrl) || string.IsNullOrEmpty(channelName))
-        {
-            return;
-        }
-
-        try
-        {
-            await ChannelService.SendMessageAsync(serverUrl, channelName, text);
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"Send failed: {ex.Message}");
-        }
-    }
-
     private async Task RefreshOnlineUsersAsync(string serverUrl, string channelName)
     {
         try
@@ -1476,16 +1050,6 @@ public sealed class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private async Task<string?> HandleCommandAsync(string commandText)
-    {
-        CommandResult result = await _commandHandler.HandleAsync(commandText);
-        if (result.Message is not null)
-        {
-            ShowSystemMessage(result.Message);
-        }
-        return result.Message;
-    }
-
     private void HandleSendRequested(string serverUrl, string text, IReadOnlyList<string> filePaths, Guid? replyToMessageId)
     {
         if (string.IsNullOrEmpty(Chat.CurrentChannelName))
@@ -1513,12 +1077,6 @@ public sealed class MainWindowViewModel : ViewModelBase
                     }
                 }
             });
-            return;
-        }
-
-        if (_commandHandler.IsCommand(text))
-        {
-            _ = HandleCommandAsync(text);
             return;
         }
 
@@ -1698,8 +1256,6 @@ public sealed class MainWindowViewModel : ViewModelBase
 
         if (!string.IsNullOrEmpty(serverUrl))
         {
-            Chat.Composer.SetCommandHandler(new CommandHandler());
-
             if (channel.IsSystem)
             {
                 Chat.Composer.IsReadOnly = true;
@@ -1913,35 +1469,6 @@ public sealed class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private void EnsureChannelInList(string serverUrl, string channelName)
-    {
-        ServerViewModel? serverVm = Sidebar.GetServer(serverUrl);
-        if (serverVm is null)
-        {
-            return;
-        }
-
-        if (!serverVm.Channels.Any(c => c.Name == channelName))
-        {
-            ChannelModel channelModel = new ChannelModel(
-                Guid.NewGuid().ToString("N"),
-                channelName,
-                [],
-                isPublic: true,
-                isProtected: false,
-                isEncrypted: false,
-                isSystem: false);
-            ChannelViewModel channelVm = new ChannelViewModel(channelModel);
-            serverVm.Channels.Add(channelVm);
-        }
-    }
-
-    private ChannelModel? FindChannel(string serverUrl, string channelName)
-    {
-        ServerViewModel? serverVm = Sidebar.GetServer(serverUrl);
-        return serverVm?.Channels.FirstOrDefault(c => c.Name == channelName)?.Model;
-    }
-
     private ChannelViewModel? FindChannelViewModel(string serverUrl, string channelName)
     {
         ServerViewModel? serverVm = Sidebar.GetServer(serverUrl);
@@ -1958,10 +1485,5 @@ public sealed class MainWindowViewModel : ViewModelBase
             }
         }
         return string.Empty;
-    }
-
-    private string GetCurrentServerUrl()
-    {
-        return Chat.CurrentServerUrl;
     }
 }
