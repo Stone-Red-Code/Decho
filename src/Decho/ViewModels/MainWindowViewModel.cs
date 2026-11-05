@@ -1104,6 +1104,59 @@ public sealed class MainWindowViewModel : ViewModelBase
         }
     }
 
+    /// <summary>Opens a channel from a #link, adding it to the list if it exists but isn't listed.</summary>
+    public async Task OpenChannelAsync(string serverUrl, string channelName)
+    {
+        ServerViewModel? server = Sidebar.GetServer(serverUrl);
+        if (server is not { IsConnected: true })
+        {
+            return;
+        }
+
+        ChannelViewModel? channel = FindListedChannel(server, channelName);
+        if (channel is null)
+        {
+            ChannelMetaDto? meta;
+            try
+            {
+                meta = await ChannelService.GetChannelMetaAsync(serverUrl, channelName);
+            }
+            catch (Exception ex)
+            {
+                ShowSystemMessage($"Could not open #{channelName}: {ex.Message}");
+                return;
+            }
+
+            if (meta is null)
+            {
+                ShowSystemMessage($"#{channelName} doesn't exist.");
+                return;
+            }
+
+            channel = FindListedChannel(server, channelName);
+            if (channel is null)
+            {
+                channel = new ChannelViewModel(new ChannelModel(
+                    meta.Id.ToString(),
+                    meta.Name,
+                    [],
+                    meta.Topic,
+                    isPublic: false,
+                    meta.IsProtected,
+                    meta.IsEncrypted,
+                    isSystem: false));
+                server.Channels.Add(channel);
+            }
+        }
+
+        server.SelectedChannel = channel;
+    }
+
+    private static ChannelViewModel? FindListedChannel(ServerViewModel server, string channelName)
+    {
+        return server.Channels.FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
+    }
+
     private async Task HandleClearHistoryRequested(ServerViewModel server)
     {
         string channelName = Chat.CurrentChannelName;
@@ -1627,8 +1680,9 @@ public sealed class MainWindowViewModel : ViewModelBase
                         password = null;
                         promptMessage = "Wrong passphrase - try again.";
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        ShowSystemMessage($"Could not join #{channel.Name}: {ex.Message}");
                         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                         {
                             Chat.OnlineUsers.Clear();

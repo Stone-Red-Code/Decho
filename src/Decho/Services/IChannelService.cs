@@ -26,6 +26,9 @@ public interface IChannelService
 
     Task<ChannelCryptoDto?> GetChannelCryptoAsync(string serverUrl, string channelName);
 
+    /// <summary>Returns null when the channel doesn't exist.</summary>
+    Task<ChannelMetaDto?> GetChannelMetaAsync(string serverUrl, string channelName);
+
     Task<ChannelJoinResult> UnlockRoomKeyAsync(string serverUrl, string channelName, string passphrase, string encryptionSalt, string wrappedRoomKey);
 
     void MarkChannelEncrypted(string serverUrl, string channelName, bool isEncrypted);

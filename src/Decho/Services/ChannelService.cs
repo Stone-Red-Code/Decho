@@ -157,6 +157,14 @@ internal sealed class ChannelService : IChannelService
         return await entry.ApiClient.GetChannelCryptoAsync(channelName);
     }
 
+    public async Task<ChannelMetaDto?> GetChannelMetaAsync(string serverUrl, string channelName)
+    {
+        ServerConnection? entry = _store.Get(serverUrl);
+        if (entry is null) throw new InvalidOperationException("Not connected to server");
+
+        return await entry.ApiClient.GetChannelMetaAsync(channelName);
+    }
+
     public async Task<ChannelJoinResult> UnlockRoomKeyAsync(string serverUrl, string channelName, string passphrase, string encryptionSalt, string wrappedRoomKey)
     {
         ServerConnection? entry = _store.Get(serverUrl);

@@ -503,21 +503,7 @@ public partial class MessageItemView : UserControl
             return;
         }
 
-        string serverUrl = ResolveServerUrl();
-        ServerViewModel? serverVm = mainVm.Sidebar.GetServer(serverUrl);
-        if (serverVm is null)
-        {
-            return;
-        }
-
-        ChannelViewModel? channel = serverVm.Channels.FirstOrDefault(c =>
-            string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
-        if (channel is null)
-        {
-            return;
-        }
-
-        mainVm.Sidebar.SelectedChannel = channel;
+        _ = mainVm.OpenChannelAsync(ResolveServerUrl(), channelName);
     }
 
     private void OnAttachmentImageLoaded(object? sender, RoutedEventArgs e)
