@@ -1,0 +1,44 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="using:Decho.Views"
+        x:Class="Decho.Views.InvitesWindow"
+        Title="Invites"
+        Width="520"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Icon="/Assets/Decho.ico">
+    <StackPanel Margin="12" Spacing="8">
+        <TextBlock Text="New invite" FontWeight="SemiBold" />
+        <Grid ColumnDefinitions="*, 8, *, 8, Auto">
+            <TextBox x:Name="MaxUsesBox" Text="1" Watermark="Max uses" />
+            <ComboBox x:Name="ExpiryBox" Grid.Column="2" HorizontalAlignment="Stretch" />
+            <Button Grid.Column="4" Content="Create" Click="OnCreateClicked" />
+        </Grid>
+
+        <TextBlock x:Name="ErrorText" Foreground="IndianRed" TextWrapping="Wrap" IsVisible="False" />
+
+        <Separator Margin="0 4" />
+
+        <TextBlock Text="Invites" FontWeight="SemiBold" />
+        <TextBlock x:Name="EmptyText" Text="No invite codes." Opacity="0.7" IsVisible="False" />
+        <ScrollViewer MaxHeight="320">
+            <ItemsControl x:Name="InviteList">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="views:InviteRow">
+                        <Grid ColumnDefinitions="*, Auto, 4, Auto" Margin="0 0 8 6">
+                            <StackPanel VerticalAlignment="Center">
+                                <SelectableTextBlock Text="{Binding Code}" FontWeight="Bold" />
+                                <TextBlock Text="{Binding Details}" FontSize="11" Opacity="0.7" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="Copy" VerticalAlignment="Center" Click="OnCopyClicked" />
+                            <Button Grid.Column="3" Content="Revoke" VerticalAlignment="Center" Click="OnRevokeClicked" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <Button Content="Close" HorizontalAlignment="Right" IsCancel="True" Click="OnCloseClicked" />
+    </StackPanel>
+</Window>

@@ -41,6 +41,8 @@ public sealed class ServerViewModel : ViewModelBase
 
     public event Func<Task>? JoinChannelRequested;
 
+    public event Func<Task>? InvitesRequested;
+
     public event Func<Task>? UnmuteUserRequested;
 
     public event Func<Task>? UnbanUserRequested;
@@ -78,6 +80,8 @@ public sealed class ServerViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> ProfileCommand { get; }
 
     public ReactiveCommand<Unit, Unit> JoinChannelCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> InvitesCommand { get; }
 
     public ReactiveCommand<Unit, Unit> UnmuteUserCommand { get; }
 
@@ -191,6 +195,7 @@ public sealed class ServerViewModel : ViewModelBase
         CreateChannelCommand = ReactiveCommand.CreateFromTask(CreateChannelAsync);
         ProfileCommand = ReactiveCommand.CreateFromTask(OpenProfileAsync);
         JoinChannelCommand = ReactiveCommand.CreateFromTask(() => JoinChannelRequested?.Invoke() ?? Task.CompletedTask);
+        InvitesCommand = ReactiveCommand.CreateFromTask(() => InvitesRequested?.Invoke() ?? Task.CompletedTask);
         UnmuteUserCommand = ReactiveCommand.CreateFromTask(() => UnmuteUserRequested?.Invoke() ?? Task.CompletedTask);
         UnbanUserCommand = ReactiveCommand.CreateFromTask(() => UnbanUserRequested?.Invoke() ?? Task.CompletedTask);
     }

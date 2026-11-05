@@ -700,6 +700,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             serverVm.CreateChannelRequested += () => HandleCreateChannelRequested(serverVm);
             serverVm.ProfileRequested += () => HandleProfileRequested(serverVm);
             serverVm.JoinChannelRequested += () => HandleJoinChannelRequested(serverVm);
+            serverVm.InvitesRequested += () => HandleInvitesRequested(serverVm);
             serverVm.UnmuteUserRequested += () => HandleUnmuteUserRequested(serverVm);
             serverVm.UnbanUserRequested += () => HandleUnbanUserRequested(serverVm);
             _ = serverVm.WhenAnyValue(s => s.SelectedChannel)
@@ -1255,6 +1256,11 @@ public sealed class MainWindowViewModel : ViewModelBase
         {
             await ShowErrorAsync("Could Not Join Channel", error);
         }
+    }
+
+    private async Task HandleInvitesRequested(ServerViewModel server)
+    {
+        await new InvitesWindow(InviteService, server.ServerUrl).ShowDialog(_mainWindow!);
     }
 
     private async Task HandleUnmuteUserRequested(ServerViewModel server)
