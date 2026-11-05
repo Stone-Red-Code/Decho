@@ -86,10 +86,10 @@ public sealed class ConnectionService : IConnectionService
 
     // ── Connection lifecycle ──────────────────────────────────────────────
 
-    public async Task<ServerModel> ConnectAsync(string serverUrl, string username, string password, bool isRegister, bool rememberMe)
+    public async Task<ServerModel> ConnectAsync(string serverUrl, string username, string password, bool isRegister, bool rememberMe, string? displayName = null, string? inviteCode = null)
     {
         ConnectDialogResult dialogResult = new ConnectDialogResult(
-            serverUrl, username, password, isRegister, rememberMe, null);
+            serverUrl, username, password, isRegister, rememberMe, null, displayName, inviteCode);
         return await ConnectCoreAsync(dialogResult);
     }
 

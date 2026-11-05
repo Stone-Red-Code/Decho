@@ -24,7 +24,7 @@ public interface IConnectionService : IDisposable
     event Action<string, string, string?>? UserBanned;
     event Action<string, string>? ForceDisconnected;
 
-    Task<ServerModel> ConnectAsync(string serverUrl, string username, string password, bool isRegister, bool rememberMe);
+    Task<ServerModel> ConnectAsync(string serverUrl, string username, string password, bool isRegister, bool rememberMe, string? displayName = null, string? inviteCode = null);
     Task ConnectWithSavedTokenAsync(string serverUrl, string username, string refreshToken, bool rememberMe);
     Task DisconnectAsync(string serverUrl);
     Task RemoveServerAsync(string serverUrl);

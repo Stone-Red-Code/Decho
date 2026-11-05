@@ -150,7 +150,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         else
         {
             _ = await ConnectionService.ConnectAsync(
-                result.ServerUrl, result.Username, result.Password, result.IsRegister, result.RememberMe);
+                result.ServerUrl, result.Username, result.Password, result.IsRegister, result.RememberMe, result.DisplayName, result.InviteCode);
         }
 
         string? refreshToken = ConnectionService.GetRefreshToken(result.ServerUrl);
