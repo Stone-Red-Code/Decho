@@ -699,6 +699,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             serverVm.RemoveRequested += () => HandleServerRemoveRequested(serverVm);
             serverVm.CreateChannelRequested += () => HandleCreateChannelRequested(serverVm);
             serverVm.ProfileRequested += () => HandleProfileRequested(serverVm);
+            serverVm.JoinChannelRequested += () => HandleJoinChannelRequested(serverVm);
             serverVm.UnmuteUserRequested += () => HandleUnmuteUserRequested(serverVm);
             serverVm.UnbanUserRequested += () => HandleUnbanUserRequested(serverVm);
             _ = serverVm.WhenAnyValue(s => s.SelectedChannel)
@@ -1242,6 +1243,17 @@ public sealed class MainWindowViewModel : ViewModelBase
         if (wasOpen)
         {
             server.SelectedChannel = FindListedChannel(server, HubConstants.DefaultChannel);
+        }
+    }
+
+    private async Task HandleJoinChannelRequested(ServerViewModel server)
+    {
+        TextPromptWindow dialog = new TextPromptWindow("Join Channel", "Enter the name of the channel to join.", "Channel name", "Join");
+        await dialog.ShowDialog(_mainWindow!);
+        if (dialog.Result is { } name
+            && await TryOpenChannelAsync(server.ServerUrl, name.TrimStart('#')) is { } error)
+        {
+            await ShowErrorAsync("Could Not Join Channel", error);
         }
     }
 
