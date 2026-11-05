@@ -1400,7 +1400,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
                         password = pwd;
                     }
-                    catch (InvalidOperationException ex) when (ex.Message == "Wrong passphrase")
+                    catch (WrongPassphraseException)
                     {
                         password = null;
                         promptMessage = "Wrong passphrase - try again.";

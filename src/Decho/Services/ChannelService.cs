@@ -225,7 +225,7 @@ internal sealed class ChannelService : IChannelService
 
         if (!entry.Manager.RoomKeys.TryStoreFromEnvelope(channelName, wrappedRoomKey, derived.KeyEncryptionKey))
         {
-            throw new InvalidOperationException("Wrong passphrase");
+            throw new WrongPassphraseException();
         }
 
         List<MessageDto> history = await entry.Manager.GetHistoryAsync(channelName);
