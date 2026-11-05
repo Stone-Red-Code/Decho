@@ -1104,17 +1104,23 @@ public sealed class MainWindowViewModel : ViewModelBase
             return;
         }
 
+        // Read before going to the background, so a channel switch can't redirect the send.
+        string channelName = Chat.CurrentChannelName;
+
         if (filePaths.Count > 0)
         {
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    await ChannelService.SendMessageWithAttachmentsAsync(serverUrl, Chat.CurrentChannelName, text, filePaths);
+                    await ChannelService.SendMessageWithAttachmentsAsync(serverUrl, channelName, text, filePaths);
                 }
                 catch (Exception ex)
                 {
-                    ShowSystemMessage($"Could not send attachments: {ex.Message}");
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    {
+                        ShowSendFailure(serverUrl, channelName, text, ex.Message);
+                    });
                 }
                 finally
                 {
@@ -1127,7 +1133,6 @@ public sealed class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        string channelName = Chat.CurrentChannelName;
         _ = Task.Run(async () =>
         {
             try
