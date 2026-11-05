@@ -154,20 +154,22 @@ public sealed class MainWindowViewModel : ViewModelBase
         }
 
         string? refreshToken = ConnectionService.GetRefreshToken(result.ServerUrl);
-        SavedServer? existingServer = ConfigManager.Load().SavedServers.FirstOrDefault(s =>
+        ClientConfig config = ConfigManager.Load();
+        SavedServer? savedServer = config.SavedServers.FirstOrDefault(s =>
             string.Equals(s.Url, result.ServerUrl, StringComparison.OrdinalIgnoreCase));
-        SavedServer savedServer = new SavedServer
+
+        if (savedServer is null)
         {
-            Name = new Uri(result.ServerUrl).Host,
-            Url = result.ServerUrl,
-            LeftChannels = existingServer?.LeftChannels ?? [],
-            LastReadMessages = existingServer?.LastReadMessages ?? [],
-            Username = result.Username,
-            RefreshToken = result.RememberMe ? refreshToken : null,
-            RememberMe = result.RememberMe,
-            LastConnected = DateTimeOffset.Now,
-        };
-        ConfigManager.SaveServer(savedServer);
+            savedServer = new SavedServer { Name = new Uri(result.ServerUrl).Host, Url = result.ServerUrl };
+            config.SavedServers.Add(savedServer);
+        }
+
+        // The entry also holds room keys, left channels and read positions, so only the login fields change.
+        savedServer.Username = result.Username;
+        savedServer.RefreshToken = result.RememberMe ? refreshToken : null;
+        savedServer.RememberMe = result.RememberMe;
+        savedServer.LastConnected = DateTimeOffset.Now;
+        ConfigManager.Save(config);
     }
 
     private async Task<ConnectDialogResult?> ShowConnectDialogAsync(SavedServer? prefill)
