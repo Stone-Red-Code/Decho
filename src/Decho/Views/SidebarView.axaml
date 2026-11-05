@@ -57,7 +57,10 @@
 												<MenuItem Header="Create Channel"
 														  Command="{Binding CreateChannelCommand}"
 														  IsVisible="{Binding IsConnected}" />
-												<MenuItem Header="Delete Channel"
+												<MenuItem Header="Leave Channel"
+															  Command="{Binding LeaveChannelCommand}"
+															  IsVisible="{Binding IsConnected}" />
+													<MenuItem Header="Delete Channel"
 														  Command="{Binding DeleteChannelCommand}"
 														  IsVisible="{Binding IsConnected}" />
 												<MenuItem Header="Clear Channel History"

@@ -54,7 +54,7 @@ public partial class App : Application
         ICryptoService crypto = new CryptoService(store);
         Locator.CurrentMutable.RegisterLazySingleton<ICryptoService>(() => crypto);
 
-        IChannelService channelService = new ChannelService(store, crypto);
+        IChannelService channelService = new ChannelService(store, crypto, new ConfigPersistenceService());
         Locator.CurrentMutable.RegisterLazySingleton<IChannelService>(() => channelService);
 
         Locator.CurrentMutable.RegisterConstant<IClipboardAttachmentReader>(new ClipboardAttachmentReader());

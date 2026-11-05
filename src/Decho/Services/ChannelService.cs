@@ -16,10 +16,13 @@ internal sealed class ChannelService : IChannelService
     private readonly IConnectionStore _store;
     private readonly ICryptoService _crypto;
 
-    public ChannelService(IConnectionStore store, ICryptoService crypto)
+    private readonly IConfigPersistenceService _config;
+
+    public ChannelService(IConnectionStore store, ICryptoService crypto, IConfigPersistenceService config)
     {
         _store = store;
         _crypto = crypto;
+        _config = config;
     }
 
     public async Task<ChannelJoinResult> JoinWithCryptoAsync(string serverUrl, string channelName, string? password)
@@ -71,6 +74,15 @@ internal sealed class ChannelService : IChannelService
 
     public async Task<ChannelJoinResult> JoinChannelAsync(string serverUrl, string channelName, string? password = null)
     {
+        ChannelJoinResult result = await JoinCoreAsync(serverUrl, channelName, password);
+
+        // A join cancels an earlier leave, so the channel is auto-joined on connect again.
+        _config.RemoveFromLeftChannels(serverUrl, channelName);
+        return result;
+    }
+
+    private async Task<ChannelJoinResult> JoinCoreAsync(string serverUrl, string channelName, string? password)
+    {
         ServerConnection? entry = _store.Get(serverUrl);
         if (entry is null) throw new InvalidOperationException("Not connected to server");
 
@@ -109,6 +121,7 @@ internal sealed class ChannelService : IChannelService
 
         await entry.Manager.LeaveChannelAsync(channelName);
         entry.Manager.UntrackChannel(channelName);
+        _config.AddLeftChannel(serverUrl, channelName);
     }
 
     public async Task DeleteChannelAsync(string serverUrl, string channelName)

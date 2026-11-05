@@ -700,6 +700,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             serverVm.CreateChannelRequested += () => HandleCreateChannelRequested(serverVm);
             serverVm.DeleteChannelRequested += () => HandleDeleteChannelRequested(serverVm);
             serverVm.ProfileRequested += () => HandleProfileRequested(serverVm);
+            serverVm.LeaveChannelRequested += () => HandleLeaveChannelRequested(serverVm);
             serverVm.ClearHistoryRequested += () => HandleClearHistoryRequested(serverVm);
             serverVm.UnmuteUserRequested += () => HandleUnmuteUserRequested(serverVm);
             serverVm.UnbanUserRequested += () => HandleUnbanUserRequested(serverVm);
@@ -1155,6 +1156,35 @@ public sealed class MainWindowViewModel : ViewModelBase
     private static ChannelViewModel? FindListedChannel(ServerViewModel server, string channelName)
     {
         return server.Channels.FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task HandleLeaveChannelRequested(ServerViewModel server)
+    {
+        string channelName = Chat.CurrentChannelName;
+        if (string.IsNullOrEmpty(channelName) || !string.Equals(Chat.CurrentServerUrl, server.ServerUrl, StringComparison.OrdinalIgnoreCase))
+        {
+            await ShowErrorAsync("Leave Channel", "Open a channel on this server first.");
+            return;
+        }
+
+        if (string.Equals(channelName, HubConstants.DefaultChannel, StringComparison.OrdinalIgnoreCase))
+        {
+            await ShowErrorAsync("Leave Channel", $"You can't leave #{HubConstants.DefaultChannel}.");
+            return;
+        }
+
+        try
+        {
+            await ChannelService.LeaveChannelAsync(server.ServerUrl, channelName);
+        }
+        catch (Exception ex)
+        {
+            await ShowErrorAsync("Could Not Leave Channel", ex.Message);
+            return;
+        }
+
+        // Moves away because a left channel can't be used, and opening it again rejoins it.
+        server.SelectedChannel = FindListedChannel(server, HubConstants.DefaultChannel);
     }
 
     private async Task HandleClearHistoryRequested(ServerViewModel server)

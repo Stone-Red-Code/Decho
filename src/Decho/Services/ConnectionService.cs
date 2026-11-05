@@ -85,7 +85,7 @@ public sealed class ConnectionService : IConnectionService
         _store = new ConnectionStore(_connections);
         ICryptoService crypto = new CryptoService(_store);
         _attachment = new AttachmentService(_store);
-        _channelService = new ChannelService(_store, crypto);
+        _channelService = new ChannelService(_store, crypto, _config);
     }
 
     // ── Connection lifecycle ──────────────────────────────────────────────
@@ -280,7 +280,6 @@ public sealed class ConnectionService : IConnectionService
             try
             {
                 _ = await _channelService.JoinChannelAsync(serverUrl, ch.Name);
-                RemoveFromLeftChannels(serverUrl, ch.Name);
             }
             catch (EchoHub.Client.Services.ChannelPasswordRequiredException)
             {
