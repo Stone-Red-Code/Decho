@@ -262,6 +262,26 @@ public sealed class MainWindowViewModel : ViewModelBase
         };
     }
 
+    /// <summary>
+    /// The server rejects things like a muted user's message through this channel rather than by
+    /// failing the send, so this can be the only sign that a message did not go through.
+    /// </summary>
+    private void ShowServerError(string serverUrl, string error)
+    {
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            bool isOpenServer = string.Equals(serverUrl, Chat.CurrentServerUrl, StringComparison.OrdinalIgnoreCase);
+            if (isOpenServer && !string.IsNullOrEmpty(Chat.CurrentChannelName))
+            {
+                ShowSystemMessage(error);
+            }
+            else
+            {
+                _ = ShowErrorAsync($"Error from {new Uri(serverUrl).Host}", error);
+            }
+        });
+    }
+
     private async Task ShowErrorAsync(string title, string message)
     {
         IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard(title, message, ButtonEnum.Ok);
@@ -881,10 +901,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             });
         };
 
-        ConnectionService.ErrorOccurred += (serverUrl, error) =>
-        {
-            Debug.WriteLine($"Error: {error}");
-        };
+        ConnectionService.ErrorOccurred += ShowServerError;
 
         ConnectionService.ChannelAdded += (serverUrl, channel) =>
         {
@@ -1077,17 +1094,35 @@ public sealed class MainWindowViewModel : ViewModelBase
             return;
         }
 
+        string channelName = Chat.CurrentChannelName;
         _ = Task.Run(async () =>
         {
             try
             {
-                await ChannelService.SendMessageAsync(serverUrl, Chat.CurrentChannelName, text, replyToMessageId);
+                await ChannelService.SendMessageAsync(serverUrl, channelName, text, replyToMessageId);
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Send failed: {ex.Message}");
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    ShowSendFailure(serverUrl, channelName, text, ex.Message);
+                });
             }
         });
+    }
+
+    private void ShowSendFailure(string serverUrl, string channelName, string text, string error)
+    {
+        FindChannelViewModel(serverUrl, channelName)?.AddMessage(
+            CreateSystemMessage($"Could not send message: {error}", channelName, serverUrl));
+
+        // Gives the text back unless the user has moved on to another channel or a new message.
+        bool isOpenChannel = string.Equals(channelName, Chat.CurrentChannelName, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(serverUrl, Chat.CurrentServerUrl, StringComparison.OrdinalIgnoreCase);
+        if (isOpenChannel && string.IsNullOrEmpty(Chat.Composer.Draft))
+        {
+            Chat.Composer.Draft = text;
+        }
     }
 
     private async Task HandleProfileRequested(ServerViewModel server)
