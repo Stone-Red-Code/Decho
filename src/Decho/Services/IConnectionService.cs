@@ -23,6 +23,7 @@ public interface IConnectionService : IDisposable
     event Action<string, string, string, string?>? UserKicked;
     event Action<string, string, string?>? UserBanned;
     event Action<string, string>? ForceDisconnected;
+    event Action<string, UserPresenceDto>? UserStatusChanged;
 
     Task<ServerModel> ConnectAsync(string serverUrl, string username, string password, bool isRegister, bool rememberMe, string? displayName = null, string? inviteCode = null);
     Task ConnectWithSavedTokenAsync(string serverUrl, string username, string refreshToken, bool rememberMe);

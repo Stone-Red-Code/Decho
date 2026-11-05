@@ -61,6 +61,8 @@ public sealed class ConnectionService : IConnectionService
 
     public event Action<string, string>? ForceDisconnected;
 
+    public event Action<string, UserPresenceDto>? UserStatusChanged;
+
     private readonly Dictionary<string, ServerConnection> _connections = new(StringComparer.OrdinalIgnoreCase);
     private readonly IConfigPersistenceService _config;
     private readonly IAttachmentService _attachment;
@@ -347,8 +349,13 @@ public sealed class ConnectionService : IConnectionService
 
         conn.UserStatusChanged += presence =>
         {
-            entry.User.Status = presence.Status;
-            entry.User.StatusMessage = presence.StatusMessage;
+            if (string.Equals(presence.Username, entry.User.Id, StringComparison.OrdinalIgnoreCase))
+            {
+                entry.User.Status = presence.Status;
+                entry.User.StatusMessage = presence.StatusMessage;
+            }
+
+            UserStatusChanged?.Invoke(entry.Server.ServerUrl, presence);
         };
 
         conn.ChannelDeleted += channelName =>

@@ -806,6 +806,16 @@ public sealed class MainWindowViewModel : ViewModelBase
             }
         };
 
+        ConnectionService.UserStatusChanged += (serverUrl, presence) =>
+        {
+            // Refreshing also covers invisible users, who drop out of the server's list.
+            if (string.Equals(serverUrl, Chat.CurrentServerUrl, StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrEmpty(Chat.CurrentChannelName))
+            {
+                _ = RefreshOnlineUsersAsync(serverUrl, Chat.CurrentChannelName);
+            }
+        };
+
         ConnectionService.ChannelDeleted += (serverUrl, channelName) =>
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
