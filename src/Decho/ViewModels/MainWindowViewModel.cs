@@ -542,7 +542,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
                 ServerViewModel? serverVm = Sidebar.GetServer(serverUrl);
-                if (serverVm is not null && serverVm.Channels.All(c => c.Name != channel.Name))
+                if (serverVm is not null && serverVm.Channels.All(c => !string.Equals(c.Name, channel.Name, StringComparison.OrdinalIgnoreCase)))
                 {
                     serverVm.Channels.Add(new ChannelViewModel(channel));
                 }
@@ -1209,7 +1209,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                 {
-                    if (!serverVm.Channels.Any(c => c.Name == channel.Name))
+                    if (!serverVm.Channels.Any(c => string.Equals(c.Name, channel.Name, StringComparison.OrdinalIgnoreCase)))
                     {
                         serverVm.Channels.Add(channelVm);
                     }
@@ -1524,7 +1524,7 @@ public sealed class MainWindowViewModel : ViewModelBase
     private ChannelViewModel? FindChannelViewModel(string serverUrl, string channelName)
     {
         ServerViewModel? serverVm = Sidebar.GetServer(serverUrl);
-        return serverVm?.Channels.FirstOrDefault(c => c.Name == channelName);
+        return serverVm?.Channels.FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
     }
 
     private string FindServerUrlForChannel(ChannelViewModel channel)

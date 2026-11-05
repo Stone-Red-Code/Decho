@@ -53,7 +53,8 @@ internal sealed class ConfigPersistenceService : IConfigPersistenceService
         ClientConfig config = ConfigManager.Load();
         SavedServer? saved = config.SavedServers
             .FirstOrDefault(s => string.Equals(s.Url, serverUrl, StringComparison.OrdinalIgnoreCase));
-        if (saved is not null && saved.LeftChannels.Remove(channelName))
+        if (saved is not null
+            && saved.LeftChannels.RemoveAll(c => string.Equals(c, channelName, StringComparison.OrdinalIgnoreCase)) > 0)
         {
             ConfigManager.Save(config);
         }
