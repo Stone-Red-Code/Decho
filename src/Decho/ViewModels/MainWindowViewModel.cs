@@ -299,6 +299,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             serverVm.RemoveRequested += () => HandleServerRemoveRequested(serverVm);
             serverVm.CreateChannelRequested += () => HandleCreateChannelRequested(serverVm);
             serverVm.ProfileRequested += () => HandleProfileRequested(serverVm);
+            serverVm.LogoutRequested += () => HandleLogoutRequested(serverVm);
             serverVm.JoinChannelRequested += () => HandleJoinChannelRequested(serverVm);
             serverVm.InvitesRequested += () => HandleInvitesRequested(serverVm);
             serverVm.ExportDataRequested += () => HandleExportDataRequested(serverVm);
@@ -874,6 +875,20 @@ public sealed class MainWindowViewModel : ViewModelBase
         if (wasOpen)
         {
             server.SelectedChannel = FindListedChannel(server, HubConstants.DefaultChannel);
+        }
+    }
+
+    private async Task HandleLogoutRequested(ServerViewModel server)
+    {
+        SaveOpenChannelReadPosition();
+
+        try
+        {
+            await ConnectionService.LogoutAsync(server.ServerUrl);
+        }
+        catch (Exception ex)
+        {
+            await ShowErrorAsync("Could Not Log Out", ex.Message);
         }
     }
 

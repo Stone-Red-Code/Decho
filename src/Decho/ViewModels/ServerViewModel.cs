@@ -39,6 +39,8 @@ public sealed class ServerViewModel : ViewModelBase
         remove => _profileRequested = (Func<Task>?)Delegate.Remove(_profileRequested, value);
     }
 
+    public event Func<Task>? LogoutRequested;
+
     public event Func<Task>? JoinChannelRequested;
 
     public event Func<Task>? InvitesRequested;
@@ -82,6 +84,8 @@ public sealed class ServerViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> CreateChannelCommand { get; }
 
     public ReactiveCommand<Unit, Unit> ProfileCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> LogoutCommand { get; }
 
     public ReactiveCommand<Unit, Unit> JoinChannelCommand { get; }
 
@@ -202,6 +206,7 @@ public sealed class ServerViewModel : ViewModelBase
         RemoveCommand = ReactiveCommand.CreateFromTask(RemoveAsync);
         CreateChannelCommand = ReactiveCommand.CreateFromTask(CreateChannelAsync);
         ProfileCommand = ReactiveCommand.CreateFromTask(OpenProfileAsync);
+        LogoutCommand = ReactiveCommand.CreateFromTask(() => LogoutRequested?.Invoke() ?? Task.CompletedTask);
         JoinChannelCommand = ReactiveCommand.CreateFromTask(() => JoinChannelRequested?.Invoke() ?? Task.CompletedTask);
         InvitesCommand = ReactiveCommand.CreateFromTask(() => InvitesRequested?.Invoke() ?? Task.CompletedTask);
         ExportDataCommand = ReactiveCommand.CreateFromTask(() => ExportDataRequested?.Invoke() ?? Task.CompletedTask);

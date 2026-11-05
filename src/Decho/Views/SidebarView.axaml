@@ -48,6 +48,9 @@
 												<MenuItem Header="Disconnect"
 														  Command="{Binding DisconnectCommand}"
 														  IsVisible="{Binding IsConnected}" />
+												<MenuItem Header="Log Out"
+														  Command="{Binding LogoutCommand}"
+														  IsVisible="{Binding IsConnected}" />
 												<MenuItem Header="Remove Server"
 														  Command="{Binding RemoveCommand}" />
 												<Separator IsVisible="{Binding IsConnected}" />

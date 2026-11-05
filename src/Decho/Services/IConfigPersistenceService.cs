@@ -4,6 +4,8 @@ public interface IConfigPersistenceService
 {
     void SaveRefreshToken(string serverUrl, string token, string userId);
 
+    void ClearRefreshToken(string serverUrl);
+
     void RemoveServerFromConfig(string serverUrl);
 
     void RemoveFromLeftChannels(string serverUrl, string channelName);

@@ -26,6 +26,17 @@ internal sealed class ConfigPersistenceService : IConfigPersistenceService
         });
     }
 
+    public void ClearRefreshToken(string serverUrl)
+    {
+        ModifyConfig(serverUrl, (_, saved) =>
+        {
+            if (saved is not null)
+            {
+                saved.RefreshToken = null;
+            }
+        });
+    }
+
     public void RemoveServerFromConfig(string serverUrl)
     {
         ModifyConfig(serverUrl, (config, saved) =>

@@ -29,6 +29,9 @@ public interface IConnectionService : IDisposable
     Task<ServerModel> ConnectAsync(string serverUrl, string username, string password, bool isRegister, bool rememberMe, string? displayName = null, string? inviteCode = null);
     Task ConnectWithSavedTokenAsync(string serverUrl, string username, string refreshToken, bool rememberMe);
     Task DisconnectAsync(string serverUrl);
+
+    /// <summary>Ends the session on the server and forgets the saved login, keeping the server in the list.</summary>
+    Task LogoutAsync(string serverUrl);
     Task RemoveServerAsync(string serverUrl);
 
     string? GetRefreshToken(string serverUrl);

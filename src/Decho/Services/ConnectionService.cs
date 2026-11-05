@@ -113,6 +113,17 @@ public sealed class ConnectionService : IConnectionService
         }
     }
 
+    public async Task LogoutAsync(string serverUrl)
+    {
+        if (_connections.TryGetValue(serverUrl, out ServerConnection? connection))
+        {
+            await connection.Manager.LogoutAsync();
+        }
+
+        _config.ClearRefreshToken(serverUrl);
+        await DisconnectAsync(serverUrl);
+    }
+
     public async Task RemoveServerAsync(string serverUrl)
     {
         _ = await CleanupConnectionAsync(serverUrl);
