@@ -11,6 +11,8 @@ using EchoHub.Client.Services;
 
 using Splat;
 
+using OsNotificationService = Decho.Services.OsNotificationService;
+
 namespace Decho;
 
 public partial class App : Application

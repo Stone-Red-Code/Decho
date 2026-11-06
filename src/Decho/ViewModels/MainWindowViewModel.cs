@@ -22,6 +22,8 @@ using System.Reactive.Linq;
 using System.Linq;
 using System.Text.RegularExpressions;
 
+using OsNotificationService = Decho.Services.OsNotificationService;
+
 namespace Decho.ViewModels;
 
 public sealed class MainWindowViewModel : ViewModelBase
